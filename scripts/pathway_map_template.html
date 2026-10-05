@@ -1,0 +1,1389 @@
+<title>Mass-Flow Corridor Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+:root{
+  --paper:#f5f7f8; --panel:#ffffff; --sunk:#eef2f4;
+  --ink:#111a20; --ink-2:#3d4d57; --muted:#697a85; --line:#d9e1e6; --line-2:#c3ced5;
+  --accent:#1f5fc4; --accent-soft:#e6eefb;
+  --t-protected:#bd3448; --t-nontarget:#a76c14; --t-alt:#2477bd; --t-ko:#0f7d55;
+  --t-repair:#6b46c1; --t-untagged:#8b9aa4;
+  --anchor-src:#1f5fc4; --anchor-tgt:#bd3448;
+  --met:#54666f; --met-ring:#b9c6cd;
+  --shadow:0 1px 2px rgba(16,30,40,.06), 0 8px 24px rgba(16,30,40,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0c1116; --panel:#121b21; --sunk:#0f171d;
+    --ink:#e7eef2; --ink-2:#b4c3cc; --muted:#7f929d; --line:#22303a; --line-2:#2e3f4b;
+    --accent:#6aa4ff; --accent-soft:#16283f;
+    --t-protected:#f2798c; --t-nontarget:#e0a44f; --t-alt:#6bb2f0; --t-ko:#43c493;
+    --t-repair:#a78bfa; --t-untagged:#7b8b95;
+    --anchor-src:#6aa4ff; --anchor-tgt:#f2798c;
+    --met:#9fb2bc; --met-ring:#33454f;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0c1116; --panel:#121b21; --sunk:#0f171d;
+  --ink:#e7eef2; --ink-2:#b4c3cc; --muted:#7f929d; --line:#22303a; --line-2:#2e3f4b;
+  --accent:#6aa4ff; --accent-soft:#16283f;
+  --t-protected:#f2798c; --t-nontarget:#e0a44f; --t-alt:#6bb2f0; --t-ko:#43c493;
+  --t-repair:#a78bfa; --t-untagged:#7b8b95;
+  --anchor-src:#6aa4ff; --anchor-tgt:#f2798c;
+  --met:#9fb2bc; --met-ring:#33454f;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Consolas,monospace}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---- shell ---- */
+.topbar{
+  display:flex; align-items:baseline; gap:18px; flex-wrap:wrap;
+  padding:14px 20px; border-bottom:1px solid var(--line); background:var(--panel);
+}
+.brand h1{
+  margin:0; font-family:"IBM Plex Serif",Georgia,serif; font-weight:600;
+  font-size:19px; letter-spacing:-.01em;
+}
+.brand p{margin:2px 0 0; color:var(--muted); font-size:12.5px}
+.topbar .spacer{flex:1}
+.controls{display:flex; gap:6px; flex-wrap:wrap; align-items:center}
+
+button.ctl{
+  font:inherit; font-size:12px; font-weight:500; color:var(--ink-2);
+  background:var(--panel); border:1px solid var(--line-2); border-radius:4px;
+  padding:5px 10px; cursor:pointer; transition:background .12s,border-color .12s,color .12s;
+}
+button.ctl:hover{border-color:var(--accent); color:var(--ink)}
+button.ctl[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent); color:var(--accent)}
+button.ctl:focus-visible, .pair:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+.shell{display:grid; grid-template-columns:246px minmax(0,1fr) 300px; height:calc(100vh - 62px); min-height:560px}
+@media(max-width:1180px){.shell{grid-template-columns:220px minmax(0,1fr)} .inspector{display:none}}
+@media(max-width:760px){.shell{grid-template-columns:1fr; height:auto} .rail{max-height:230px}}
+
+/* ---- rail ---- */
+.rail{border-right:1px solid var(--line); background:var(--panel); overflow-y:auto; padding:10px 0 24px}
+.rail .search{padding:0 12px 10px}
+.rail input{
+  width:100%; font:inherit; font-size:12.5px; padding:6px 8px; color:var(--ink);
+  background:var(--sunk); border:1px solid var(--line); border-radius:4px;
+}
+.rail input:focus{outline:none; border-color:var(--accent)}
+.orgblock{margin-bottom:2px}
+.orghead{
+  display:flex; align-items:baseline; gap:7px; padding:9px 12px 5px;
+  border-top:1px solid var(--line);
+}
+.orghead .k{font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600; color:var(--ink)}
+.orghead .sp{font-size:11px; color:var(--muted); font-style:italic; flex:1; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.pair{
+  display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+  padding:5px 12px 5px 16px; border:0; background:none; cursor:pointer; color:var(--ink-2);
+  font:inherit; font-size:12.5px; border-left:2px solid transparent;
+}
+.pair:hover{background:var(--sunk); color:var(--ink)}
+.pair.on{background:var(--accent-soft); border-left-color:var(--accent); color:var(--accent); font-weight:600}
+.pair .t{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-family:"IBM Plex Mono",monospace}
+.pair .h{font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums}
+.pair.on .h{color:var(--accent)}
+.pair.dead{color:var(--muted); cursor:default; font-style:italic}
+.pair.dead:hover{background:none}
+.rail .search .wide{width:100%; margin-top:6px; text-align:center}
+.kobadge{
+  font-size:10px; font-weight:600; padding:0 5px; border-radius:3px; flex:none;
+  background:color-mix(in srgb, var(--t-ko) 16%, transparent); color:var(--t-ko);
+  font-variant-numeric:tabular-nums;
+}
+.dot{width:6px; height:6px; border-radius:50%; flex:none; background:var(--t-ko)}
+.dot.rep{background:var(--t-repair)}
+.dot.no{background:var(--line-2)}
+
+/* ---- canvas ---- */
+.stage{position:relative; overflow:hidden; background:var(--paper)}
+.stage svg{display:block; width:100%; height:100%; cursor:grab; touch-action:none}
+.stage svg.drag{cursor:grabbing}
+.maphead{
+  position:absolute; top:0; left:0; right:0; padding:12px 16px; pointer-events:none;
+  background:linear-gradient(to bottom, var(--paper) 58%,
+    color-mix(in srgb, var(--paper) 0%, transparent));
+}
+.maphead h2{margin:0; font-family:"IBM Plex Serif",Georgia,serif; font-size:16px; font-weight:600}
+.maphead .sub{margin:2px 0 0; font-size:12px; color:var(--muted)}
+.maphead .sub b{font-family:"IBM Plex Mono",monospace; font-weight:500; color:var(--ink-2)}
+.zoombar{position:absolute; right:12px; bottom:12px; display:flex; gap:5px}
+.hint{position:absolute; left:16px; bottom:12px; font-size:11px; color:var(--muted)}
+
+/* design-only pair (optknock secreted target): no corridor geometry, no panel --
+   the strain-design drawer is the whole view. */
+.pair .h.dtag{color:var(--t-ko); font-weight:600}
+
+/* svg pieces */
+.rspine{stroke-linecap:round; fill:none}
+.rlabel{font-family:"IBM Plex Mono",monospace; font-size:8.5px; fill:var(--ink-2);
+  text-anchor:middle; pointer-events:none}
+.mlabel{font-size:8px; fill:var(--muted); text-anchor:middle; pointer-events:none}
+.link{fill:none; stroke:var(--met-ring); stroke-linecap:round}
+.link.spine{stroke-linecap:round}
+.link.spine.dim{opacity:.55}
+.mnode circle{stroke:var(--met-ring)}
+.dim{opacity:.2}
+.cofonly .rspine{opacity:.42}
+.cofonly .rlabel{opacity:.55; font-style:italic}
+.rgroup{cursor:pointer}
+.rgroup.sel .rspine{stroke-width:6}
+.anchor-ring{fill:none; stroke-dasharray:2.5 2.5}
+
+.tooltip{
+  position:absolute; pointer-events:none; z-index:9; width:max-content; max-width:300px;
+  background:var(--panel); border:1px solid var(--line-2); border-radius:5px;
+  box-shadow:var(--shadow); padding:8px 10px; font-size:11.5px; color:var(--ink);
+  opacity:0; transition:opacity .09s; visibility:hidden;
+}
+.tooltip.on{opacity:1; visibility:visible}
+.tooltip .id{font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:12px}
+.tooltip .nm{color:var(--muted); margin-top:1px}
+.tooltip .tag{margin-top:4px; font-weight:600; font-size:11px}
+/* annotation block: the FVA/FCA numbers that make a node worth hovering */
+.tooltip .ann{
+  margin-top:6px; padding-top:6px; border-top:1px solid var(--line);
+  display:grid; grid-template-columns:auto 1fr; gap:2px 10px; font-size:11px;
+}
+.tooltip .ann dt{color:var(--muted)}
+.tooltip .ann dd{margin:0; text-align:right; font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px}
+.tooltip .ko{margin-top:6px; font-weight:600; font-size:11px; color:var(--t-ko)}
+.tooltip .gr{margin-top:5px; font-family:"IBM Plex Mono",monospace; font-size:10px;
+  color:var(--muted); word-break:break-word; max-width:280px}
+.hovered .rspine{stroke-width:6}
+.hovered circle{stroke-width:2.2}
+
+/* ---- inspector ---- */
+.inspector{border-left:1px solid var(--line); background:var(--panel); overflow-y:auto; padding:14px 15px 30px}
+.sect{margin-bottom:20px}
+.sect h3{
+  margin:0 0 8px; font-size:10.5px; font-weight:600; letter-spacing:.11em;
+  text-transform:uppercase; color:var(--muted);
+}
+.kv{display:grid; grid-template-columns:1fr auto; gap:3px 10px; font-size:12.5px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0; font-variant-numeric:tabular-nums; font-weight:500; text-align:right}
+.kv dd.mono{font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:500}
+.pill{display:inline-block; padding:1px 7px; border-radius:3px; font-size:11px; font-weight:600}
+.pill.ok{background:color-mix(in srgb, var(--t-ko) 16%, transparent); color:var(--t-ko)}
+.pill.warn{background:color-mix(in srgb, var(--t-repair) 18%, transparent); color:var(--t-repair)}
+.pill.bad{background:color-mix(in srgb, var(--t-protected) 16%, transparent); color:var(--t-protected)}
+
+.legend{display:flex; flex-direction:column; gap:6px}
+.legrow{display:flex; align-items:center; gap:8px; font-size:12px}
+.legrow .sw{width:22px; height:0; border-top-width:3px; border-top-style:solid; flex:none; border-radius:2px}
+.legrow .cnt{margin-left:auto; color:var(--muted); font-variant-numeric:tabular-nums; font-size:11.5px}
+.legrow .lb{color:var(--ink-2)}
+.legnote{font-size:11.5px; color:var(--muted); margin-top:8px; line-height:1.45}
+
+.detail .rid{font-family:"IBM Plex Mono",monospace; font-size:13.5px; font-weight:600; word-break:break-all}
+.detail .rname{color:var(--muted); font-size:12px; margin:2px 0 9px}
+.detail .gr{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-2);
+  background:var(--sunk); border:1px solid var(--line); border-radius:4px;
+  padding:6px 7px; margin-top:8px; word-break:break-all; max-height:110px; overflow:auto;
+}
+.empty{color:var(--muted); font-size:12.5px; font-style:italic}
+
+/* ---- strain-design drawer (tool-layer design_table view) ---- */
+.stage{display:flex; flex-direction:column}
+.canvaswrap{position:relative; flex:1; min-height:0}
+.drawer{
+  border-top:1px solid var(--line); background:var(--panel); flex:none;
+  display:flex; flex-direction:column; max-height:46%;
+}
+/* .drawer sets display:flex, which outranks the UA [hidden] rule -- without this the
+   `hidden` property would not actually hide the panel on a pair with no design run. */
+.drawer[hidden]{display:none}
+.drawer.closed{max-height:none}
+.drawer.closed .dbody{display:none}
+.dhead{
+  display:flex; align-items:center; gap:10px; padding:7px 14px; cursor:pointer;
+  border-bottom:1px solid transparent; flex:none;
+}
+.drawer:not(.closed) .dhead{border-bottom-color:var(--line)}
+.dhead h3{
+  margin:0; font-size:10.5px; font-weight:600; letter-spacing:.11em;
+  text-transform:uppercase; color:var(--muted);
+}
+.dhead .caret{color:var(--muted); font-size:10px; transition:transform .15s}
+.drawer.closed .dhead .caret{transform:rotate(-90deg)}
+.dhead .sum{font-size:12px; color:var(--ink-2)}
+.dhead .sum b{font-variant-numeric:tabular-nums}
+.dhead .spacer{flex:1}
+.dbody{overflow:auto; min-height:0; padding:0 14px 12px}
+.dnote{font-size:11.5px; color:var(--muted); padding:8px 0 10px; line-height:1.45; max-width:78ch}
+.dnote code{font-family:"IBM Plex Mono",monospace; font-size:11px}
+
+table.dgrid{border-collapse:collapse; width:100%; font-size:12px}
+table.dgrid th, table.dgrid td{
+  padding:5px 9px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap;
+}
+table.dgrid th{
+  position:sticky; top:0; z-index:1; background:var(--panel); color:var(--muted);
+  font-size:10.5px; font-weight:600; letter-spacing:.05em; text-transform:uppercase;
+  cursor:pointer; user-select:none;
+}
+table.dgrid th:hover{color:var(--ink)}
+table.dgrid th .u{text-transform:none; letter-spacing:0; font-weight:400; opacity:.75}
+table.dgrid th.axis{color:var(--accent)}
+table.dgrid th .ar{opacity:.55; margin-left:3px}
+table.dgrid td.num{text-align:right; font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",monospace; font-size:11.5px}
+table.dgrid td.kos{white-space:normal; font-family:"IBM Plex Mono",monospace; font-size:11px}
+table.dgrid tbody tr{cursor:pointer}
+table.dgrid tbody tr:hover{background:var(--sunk)}
+table.dgrid tbody tr.on{background:var(--accent-soft)}
+table.dgrid tbody tr.on td{color:var(--accent)}
+.kochip{
+  display:inline-block; padding:0 5px; margin:1px 3px 1px 0; border-radius:3px;
+  background:color-mix(in srgb, var(--t-ko) 15%, transparent); color:var(--t-ko);
+}
+.kochip.off{background:var(--sunk); color:var(--muted)}
+
+/* KO overlay on the map */
+.rgroup.ko .rspine{stroke:var(--t-ko) !important}
+.koslash{stroke:var(--t-ko); stroke-width:2.2; stroke-linecap:round}
+.korim{fill:none; stroke:var(--t-ko); stroke-width:1.4; stroke-dasharray:3 2}
+
+@media(max-width:760px){.drawer{max-height:none}}
+@media(prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+
+<div class="topbar">
+  <div class="brand">
+    <h1>Mass-Flow Corridor Atlas</h1>
+    <p>GUDIE-extracted bioproduction subgraphs <span class="mono">H</span>, one per carbon source &rarr; target pair,
+      with the strain-design engine's verified knockout front</p>
+  </div>
+  <div class="spacer"></div>
+  <div class="controls">
+    <button class="ctl" id="tg-currency" aria-pressed="false">Cofactor edges</button>
+    <button class="ctl" id="tg-corridor" aria-pressed="false">Corridor only</button>
+    <button class="ctl" id="tg-labels" aria-pressed="true">Labels</button>
+    <button class="ctl" id="tg-design" aria-pressed="false" hidden>Strain design</button>
+    <button class="ctl" id="btn-theme">Theme</button>
+  </div>
+</div>
+
+<div class="shell">
+  <nav class="rail" id="rail" aria-label="Pathway index">
+    <div class="search">
+      <input id="q" type="search" placeholder="Filter targets..." aria-label="Filter targets">
+      <button class="ctl wide" id="tg-hasdesign" aria-pressed="false" hidden>With KO designs</button>
+    </div>
+    <div id="railbody"></div>
+  </nav>
+
+  <div class="stage" id="stage">
+    <div class="canvaswrap" id="canvas">
+      <div class="maphead">
+        <h2 id="mtitle">&nbsp;</h2>
+        <p class="sub" id="msub">&nbsp;</p>
+      </div>
+      <svg id="svg" role="img" aria-label="Metabolic corridor map"></svg>
+      <div class="tooltip" id="tip" role="tooltip"></div>
+      <div class="hint">Drag to pan &middot; scroll to zoom &middot; hover for annotation &middot; click a reaction for detail</div>
+      <div class="zoombar">
+        <button class="ctl" id="z-in" aria-label="Zoom in">+</button>
+        <button class="ctl" id="z-out" aria-label="Zoom out">&minus;</button>
+        <button class="ctl" id="z-fit">Fit</button>
+      </div>
+    </div>
+
+    <section class="drawer closed" id="drawer" hidden>
+      <div class="dhead" id="dhead" role="button" tabindex="0" aria-expanded="false"
+           aria-controls="dbody">
+        <span class="caret">&#9660;</span>
+        <h3>Strain design</h3>
+        <span class="sum" id="dsum"></span>
+        <span class="spacer"></span>
+        <button class="ctl" id="d-clear" hidden>Clear KO overlay</button>
+        <button class="ctl" id="d-csv">Download CSV</button>
+        <button class="ctl" id="d-copy">Copy CSV</button>
+      </div>
+      <div class="dbody" id="dbody"></div>
+    </section>
+  </div>
+
+  <aside class="inspector" id="inspector">
+    <div class="sect"><h3>Extraction</h3><dl class="kv" id="stats"></dl></div>
+    <div class="sect"><h3>Design tags in H</h3><div class="legend" id="legend"></div>
+      <p class="legnote">Tags come from FVA over <span class="mono">H</span> at the operating point
+        <span class="mono">f&middot;v*</span>, crossed with FCA coupling to the target.
+        <b>ko_candidate</b> and <b>alt_route</b> are the knockout-enumerable payload.
+        Edges shared only through a cofactor (ATP, NADH, H&#8314;, H&#8322;O) are hidden by
+        default &mdash; they are 76% of all mass-flow edges and carry no carbon.
+        Ranking and reachability still use every edge.</p>
+    </div>
+    <div class="sect detail"><h3>Selection</h3><div id="detail"><p class="empty">Click a reaction on the map.</p></div></div>
+    <div class="sect" id="provsect" hidden><h3>Design engine</h3>
+      <dl class="kv" id="prov"></dl>
+      <p class="legnote" id="guarantee"></p>
+    </div>
+  </aside>
+</div>
+
+<script id="map-data" type="application/json">__DATA__</script>
+<script>
+(function(){
+"use strict";
+const DATA = JSON.parse(document.getElementById("map-data").textContent);
+
+const TAGS = [
+  ["protected","Protected","--t-protected","backbone + coupled to target"],
+  ["nontarget_essential","Nontarget essential","--t-nontarget","backbone, not coupled"],
+  ["alt_route","Alt route","--t-alt","flexible + coupled"],
+  ["ko_candidate","KO candidate","--t-ko","flexible, not coupled"],
+];
+const TAGCOLOR = {protected:"--t-protected", nontarget_essential:"--t-nontarget",
+                  alt_route:"--t-alt", ko_candidate:"--t-ko", "":"--t-untagged"};
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+const state = {pair:null, currency:false, corridor:false, labels:true,
+               sel:null, k:1, tx:0, ty:0, layout:null,
+               // strain-design overlay: the KO set of the selected design row
+               design:null, koRow:null, koRank:null, ko:new Set(), sortKey:null, sortDir:1,
+               onlyDesigned:false};
+
+/* ---------------- index rail ---------------- */
+const railbody = document.getElementById("railbody");
+/* How many verified KO designs this pair carries. 0 when the pair was never run
+   through the engine, or when the engine ran and found none. */
+function nDesigns(p){
+  const d = p.design_result;
+  return d && d.status === "ok" ? d.n_designs : 0;
+}
+/* Which search heads ran for this pair. A run may merge tier 1 (FastPros greedy) and
+   tier 2 (StrainDesign MILP); every row still carries the tier that produced it. */
+function tiersRun(dr){
+  const t = dr.provenance && dr.provenance.tiers_run;
+  return (t && t.length) ? t : [dr.params ? dr.params.tier : 1];
+}
+function usesTier2(dr){ return tiersRun(dr).indexOf(2) >= 0; }
+function tierLabel(dr){
+  const t = tiersRun(dr);
+  return t.length > 1 ? "Tier " + t.join("+") : "Tier " + t[0];
+}
+function buildRail(filter){
+  railbody.innerHTML = "";
+  const f = (filter||"").trim().toLowerCase();
+  for(const org of DATA.organisms){
+    const pairs = org.pairs.filter(p => (!state.onlyDesigned || nDesigns(p)) && (!f
+      || p.target_met.toLowerCase().includes(f)
+      || org.key.toLowerCase().includes(f)
+      || (org.organism||"").toLowerCase().includes(f)));
+    if(!pairs.length) continue;
+    const blk = document.createElement("div"); blk.className = "orgblock";
+    const hd = document.createElement("div"); hd.className = "orghead";
+    hd.innerHTML = '<span class="k"></span><span class="sp"></span>';
+    hd.querySelector(".k").textContent = org.key;
+    hd.querySelector(".sp").textContent = org.organism || "";
+    blk.appendChild(hd);
+    for(const p of pairs){
+      const b = document.createElement("button");
+      b.className = "pair" + (p.qualified ? "" : " dead");
+      const dot = document.createElement("span");
+      dot.className = "dot" + (!p.qualified ? " no" : (p.repair_fired ? " rep" : ""));
+      const t = document.createElement("span"); t.className = "t"; t.textContent = p.target_met;
+      const h = document.createElement("span");
+      h.className = "h" + (p.design_only ? " dtag" : "");
+      h.textContent = p.design_only ? "secreted" : (p.qualified ? ("|H| " + p.n_H) : "skipped");
+      b.append(dot, t, h);
+      if(nDesigns(p)){
+        const kb = document.createElement("span");
+        kb.className = "kobadge"; kb.textContent = nDesigns(p) + " KO";
+        kb.title = nDesigns(p) + " verified growth-coupled KO design(s)";
+        b.append(kb);
+      }
+      if(p.qualified){
+        b.dataset.id = p._id;
+        b.addEventListener("click", () => select(p._id));
+      }else{
+        b.title = p.attrition_reason || "not extracted";
+        b.disabled = true;
+      }
+      blk.appendChild(b);
+    }
+    railbody.appendChild(blk);
+  }
+}
+document.getElementById("q").addEventListener("input", e => buildRail(e.target.value));
+
+/* ---------------- graph construction ---------------- */
+function primaryMet(edge, metById, freq, showCurrency){
+  // 76% of MFG edges are shared ONLY through a cofactor (ATP/NADH/H+/H2O). Those
+  // are energy/redox couplings, not carbon flow, and drawing them buries the
+  // route -- so with showCurrency off the edge is dropped (null), not downgraded.
+  let c = edge.metabolites.filter(m => !(metById.get(m)||{}).currency);
+  if(!c.length){
+    if(!showCurrency) return null;
+    c = edge.metabolites.slice();
+  }
+  if(!c.length) return null;
+  // rarest metabolite across the map is the step-specific intermediate; hubs
+  // (CoA, glutamate, ...) recur on many edges and would collapse the map.
+  c = c.slice().sort((x,y) => {
+    const fx = freq.get(x)||0, fy = freq.get(y)||0;
+    if(fx !== fy) return fx - fy;
+    return ((metById.get(y)||{}).C||0) - ((metById.get(x)||{}).C||0);
+  });
+  return c[0];
+}
+
+function spinePath(pair){
+  // Dominant-flux source->target route, weighted exactly as extraction/repair.py
+  // weights its reconnection path: w = log(mf_max / mf). This route is ALWAYS
+  // drawn, even where a step is shared only through a cofactor -- otherwise the
+  // one thing the map exists to show could vanish with the currency filter.
+  const adj = new Map();
+  for(const r of pair.reactions) adj.set(r.id, []);
+  let mx = 0;
+  for(const e of pair.edges) if(e.mass_flow > mx) mx = e.mass_flow;
+  if(!(mx > 0)) mx = 1;
+  for(const e of pair.edges){
+    if(adj.has(e.source) && adj.has(e.target))
+      adj.get(e.source).push([e.target, Math.log(mx / Math.max(e.mass_flow, 1e-12))]);
+  }
+  const srcs = pair.source_ids.filter(x => adj.has(x));
+  if(!srcs.length || !adj.has(pair.target_id)) return [];
+  const dist = new Map(), prev = new Map(), done = new Set();
+  for(const x of srcs) dist.set(x, 0);
+  for(;;){
+    let u = null, best = Infinity;
+    for(const [k, v] of dist) if(!done.has(k) && v < best){ best = v; u = k; }
+    if(u === null || u === pair.target_id) break;
+    done.add(u);
+    for(const [v, w] of adj.get(u)){
+      const nd = best + w;
+      if(!dist.has(v) || nd < dist.get(v)){ dist.set(v, nd); prev.set(v, u); }
+    }
+  }
+  if(!dist.has(pair.target_id)) return [];
+  const path = [pair.target_id];
+  let guard = 0;
+  while(prev.has(path[0]) && guard++ < 5000) path.unshift(prev.get(path[0]));
+  return path;
+}
+
+function corridorSet(pair){
+  const fwd = new Map(), rev = new Map();
+  for(const r of pair.reactions){ fwd.set(r.id, []); rev.set(r.id, []); }
+  for(const e of pair.edges){
+    if(fwd.has(e.source) && fwd.has(e.target)){ fwd.get(e.source).push(e.target); rev.get(e.target).push(e.source); }
+  }
+  const bfs = (starts, g) => {
+    const seen = new Set(starts.filter(s => g.has(s))); const q = [...seen];
+    while(q.length){ const n = q.shift(); for(const m of (g.get(n)||[])) if(!seen.has(m)){ seen.add(m); q.push(m); } }
+    return seen;
+  };
+  const fromSrc = bfs(pair.source_ids, fwd);
+  const toTgt = bfs([pair.target_id], rev);
+  const both = new Set(); for(const n of fromSrc) if(toTgt.has(n)) both.add(n);
+  return both;
+}
+
+function layout(pair, showCurrency){
+  const metById = new Map(pair.metabolites.map(m => [m.id, m]));
+  const freq = new Map();
+  for(const e of pair.edges) for(const m of e.metabolites) freq.set(m, (freq.get(m)||0)+1);
+
+  const rx = new Map(pair.reactions.map(r => [r.id, Object.assign({}, r)]));
+  // topology (ranking, reachability) always uses EVERY mass-flow edge; the
+  // currency filter decides only what gets drawn, so a reaction keeps its
+  // position in the route when cofactor edges are toggled.
+  const spine = spinePath(pair);
+  const spineEdge = new Set();
+  for(let i = 0; i < spine.length - 1; i++) spineEdge.add(spine[i] + ">" + spine[i+1]);
+  const spineNode = new Set(spine);
+  const linksAll = [], links = [];
+  for(const e of pair.edges){
+    if(!rx.has(e.source) || !rx.has(e.target)) continue;
+    linksAll.push({a:e.source, b:e.target});
+    const onSpine = spineEdge.has(e.source + ">" + e.target);
+    const met = primaryMet(e, metById, freq, showCurrency || onSpine);
+    if(met !== null) links.push({a:e.source, b:e.target, met, mass:e.mass_flow, spine:onSpine});
+  }
+
+  // ranks: BFS from the carbon source over reaction adjacency
+  const fwd = new Map(), rev = new Map();
+  for(const id of rx.keys()){ fwd.set(id, []); rev.set(id, []); }
+  for(const l of linksAll){ fwd.get(l.a).push(l.b); rev.get(l.b).push(l.a); }
+  const rank = new Map();
+  let seeds = pair.source_ids.filter(s => rx.has(s));
+  if(!seeds.length) seeds = [...rx.keys()].filter(id => rev.get(id).length === 0);
+  if(!seeds.length) seeds = [[...rx.keys()][0]];
+  let q = []; for(const s of seeds){ rank.set(s, 0); q.push(s); }
+  while(q.length){
+    const n = q.shift();
+    for(const m of fwd.get(n)) if(!rank.has(m)){ rank.set(m, rank.get(n)+1); q.push(m); }
+  }
+  // anything the forward sweep missed: place by distance back from the target
+  const maxF = Math.max(0, ...rank.values());
+  const un = [...rx.keys()].filter(id => !rank.has(id));
+  if(un.length){
+    const d = new Map(); if(rx.has(pair.target_id)) d.set(pair.target_id, 0);
+    q = [...d.keys()];
+    while(q.length){ const n = q.shift(); for(const m of rev.get(n)) if(!d.has(m)){ d.set(m, d.get(n)+1); q.push(m); } }
+    for(const id of un) rank.set(id, d.has(id) ? Math.max(0, maxF - d.get(id)) : maxF);
+  }
+  if(rx.has(pair.target_id)) rank.set(pair.target_id, Math.max(...rank.values()) + 1);
+
+  // bipartite node set: reactions at integer ranks, metabolites between them
+  const nodes = new Map();
+  for(const [id, r] of rx) nodes.set("R:"+id, {kind:"r", id, data:r, rank:rank.get(id)});
+  const metRank = new Map();
+  for(const l of links){
+    const mid = (rank.get(l.a) + rank.get(l.b)) / 2;
+    if(!metRank.has(l.met)) metRank.set(l.met, []);
+    metRank.get(l.met).push(mid);
+  }
+  for(const [mid, arr] of metRank){
+    const r = arr.reduce((a,b)=>a+b,0)/arr.length;
+    // half-integer only: a metabolite must never share a column with a reaction
+    // spine, or the circle lands on top of it.
+    nodes.set("M:"+mid, {kind:"m", id:mid, data:metById.get(mid)||{id:mid,name:mid,C:0},
+                         rank:Math.floor(r) + 0.5});
+  }
+
+  // bipartite edges
+  const bedges = [];
+  for(const l of links){
+    bedges.push({s:"R:"+l.a, t:"M:"+l.met, mass:l.mass, spine:l.spine});
+    bedges.push({s:"M:"+l.met, t:"R:"+l.b, mass:l.mass, spine:l.spine});
+  }
+  // dedupe parallel bipartite edges, keeping the largest mass flow
+  const emap = new Map();
+  for(const e of bedges){
+    const k = e.s + ">" + e.t;
+    const cur = emap.get(k);
+    if(!cur || cur.mass < e.mass) emap.set(k, Object.assign({}, e, {spine: e.spine || (cur && cur.spine)}));
+    else if(e.spine) cur.spine = true;
+  }
+  const edges = [...emap.values()];
+
+  // barycenter ordering within each rank
+  const nbr = new Map(); for(const k of nodes.keys()) nbr.set(k, []);
+  for(const e of edges){ nbr.get(e.s).push(e.t); nbr.get(e.t).push(e.s); }
+  const ranksSorted = [...new Set([...nodes.values()].map(n => n.rank))].sort((a,b)=>a-b);
+  const byRank = new Map(ranksSorted.map(r => [r, []]));
+  for(const [k, n] of nodes) byRank.get(n.rank).push(k);
+  for(const [, arr] of byRank) arr.sort();
+  const pos = new Map();
+  byRank.forEach(arr => arr.forEach((k, i) => pos.set(k, i)));
+  for(let it=0; it<6; it++){
+    for(const r of (it % 2 ? ranksSorted.slice().reverse() : ranksSorted)){
+      const arr = byRank.get(r);
+      const bary = new Map(arr.map(k => {
+        const ns = nbr.get(k).filter(x => nodes.get(x).rank !== r);
+        const v = ns.length ? ns.reduce((a,x)=>a+pos.get(x),0)/ns.length : pos.get(k);
+        return [k, v];
+      }));
+      arr.sort((a,b) => (bary.get(a)-bary.get(b)) || (pos.get(a)-pos.get(b)));
+      arr.forEach((k,i) => pos.set(k, i));
+    }
+  }
+
+  // coordinates
+  const COLW = 108, ROWH = 34;
+  const maxRows = Math.max(...[...byRank.values()].map(a => a.length), 1);
+  const r0 = ranksSorted[0];
+  for(const [r, arr] of byRank){
+    const off = (maxRows - arr.length) / 2;
+    arr.forEach((k, i) => {
+      const n = nodes.get(k);
+      n.x = (r - r0) * COLW;
+      n.y = (i + off) * ROWH;
+    });
+  }
+  const corridor = corridorSet(pair);
+  const linked = new Set();
+  for(const l of links){ linked.add(l.a); linked.add(l.b); }
+  const cofactorOnly = [...rx.keys()].filter(id => !linked.has(id));
+  const maxMass = Math.max(1e-12, ...edges.map(e => e.mass), 1e-12);
+  const xs = [...nodes.values()].map(n=>n.x), ys = [...nodes.values()].map(n=>n.y);
+  return {nodes, edges, corridor, maxMass, cofactorOnly:new Set(cofactorOnly),
+          spine, spineNode, dom:new Map(),   // node key -> drawn <g>, filled by render()
+          bbox:{x0:Math.min(...xs)-70, x1:Math.max(...xs)+70,
+                y0:Math.min(...ys)-34, y1:Math.max(...ys)+34}};
+}
+
+/* ---------------- render ---------------- */
+const SVG_NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("svg");
+const tip = document.getElementById("tip");
+const stage = document.getElementById("stage");
+const canvas = document.getElementById("canvas");
+let root = null;
+
+function el(n, attrs){ const e = document.createElementNS(SVG_NS, n);
+  for(const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+
+const RW = 17;  // half-length of a reaction spine
+
+function renderPlaceholder(pair){
+  // A design-only pair (optknock secreted target) has no corridor geometry, and no
+  // placeholder panel either -- the strain-design drawer below is the whole view.
+  state.layout = null;
+  svg.innerHTML = "";
+}
+
+function render(){
+  const pair = state.pair; if(!pair) return;
+  if(pair.design_only){ renderPlaceholder(pair); return; }
+  const L = state.layout = layout(pair, state.currency);
+  // Resolve the palette to concrete colors once per render. var() inside an SVG
+  // presentation attribute is not reliably honoured, and re-resolving per node
+  // would mean a getComputedStyle call per element.
+  const PAL = {};
+  for(const k in TAGCOLOR) PAL[k] = cssv(TAGCOLOR[k]) || "#888";
+  PAL._met = cssv("--met") || "#556";
+  PAL._ring = cssv("--met-ring") || "#aab";
+  PAL._sunk = cssv("--sunk") || "#eee";
+  PAL._src = cssv("--anchor-src") || "#1f5fc4";
+  PAL._tgt = cssv("--anchor-tgt") || "#bd3448";
+  PAL._repair = cssv("--t-repair") || "#6b46c1";
+  PAL._accent = cssv("--accent") || "#1f5fc4";
+  svg.innerHTML = "";
+  const defs = el("defs");
+  const mk = el("marker", {id:"ah", viewBox:"0 0 8 8", refX:"7", refY:"4",
+    markerWidth:"5", markerHeight:"5", orient:"auto-start-reverse"});
+  mk.appendChild(el("path", {d:"M0,0 L8,4 L0,8 z", fill:PAL._ring}));
+  defs.appendChild(mk);
+  const mks = el("marker", {id:"ahs", viewBox:"0 0 8 8", refX:"7", refY:"4",
+    markerWidth:"5", markerHeight:"5", orient:"auto-start-reverse"});
+  mks.appendChild(el("path", {d:"M0,0 L8,4 L0,8 z", fill:PAL._accent}));
+  defs.appendChild(mks);
+  svg.appendChild(defs);
+  root = el("g"); svg.appendChild(root);
+
+  const gLinks = el("g"); const gSpine = el("g"); const gMets = el("g"); const gRxns = el("g");
+  root.append(gLinks, gSpine, gMets, gRxns);
+
+  const vis = k => {
+    const n = L.nodes.get(k);
+    if(!state.corridor) return true;
+    if(n.kind === "r") return L.corridor.has(n.id);
+    return true;
+  };
+  const dimK = k => state.corridor ? false : (L.nodes.get(k).kind === "r" && !L.corridor.has(L.nodes.get(k).id));
+
+  // links
+  for(const e of L.edges){
+    const a = L.nodes.get(e.s), b = L.nodes.get(e.t);
+    if(!a || !b) continue;
+    if(state.corridor && (!vis(e.s) || !vis(e.t))) continue;
+    const x1 = a.x + (a.kind === "r" ? RW : 6), x2 = b.x - (b.kind === "r" ? RW : 6);
+    const mx = (x1 + x2) / 2;
+    const w = 0.5 + 2.6 * Math.sqrt(e.mass / L.maxMass);
+    const p = el("path", {
+      class:"link" + ((dimK(e.s) && dimK(e.t)) ? " dim" : "") + (e.spine ? " spine" : ""),
+      d:`M${x1},${a.y} C${mx},${a.y} ${mx},${b.y} ${x2},${b.y}`,
+      stroke: e.spine ? PAL._accent : PAL._ring,
+      "stroke-width": (e.spine ? Math.max(2.1, w) : w).toFixed(2),
+      "marker-end": b.kind === "r" ? (e.spine ? "url(#ahs)" : "url(#ah)") : null,
+    });
+    if(b.kind !== "r") p.removeAttribute("marker-end");
+    (e.spine ? gSpine : gLinks).appendChild(p);
+  }
+
+  // metabolites
+  for(const [k, n] of L.nodes){
+    if(n.kind !== "m") continue;
+    if(state.corridor){
+      // keep a metabolite only if it still links two visible reactions
+      const touching = L.edges.some(e => (e.s === k && vis(e.t)) || (e.t === k && vis(e.s)));
+      if(!touching) continue;
+    }
+    const g = el("g", {class:"mnode"});
+    const C = n.data.C || 0;
+    const r = 3.4 + Math.min(4.6, Math.sqrt(C) * 1.25);
+    const c = el("circle", {cx:n.x, cy:n.y, r:r.toFixed(2),
+      fill: n.data.currency ? PAL._sunk : PAL._met,
+      stroke: PAL._ring, "stroke-width": n.data.currency ? 1 : 0.8});
+    g.appendChild(c);
+    if(state.labels){
+      const t = el("text", {class:"mlabel", x:n.x, y:n.y + r + 8});
+      t.textContent = n.id; g.appendChild(t);
+    }
+    g.__key = k; L.dom.set(k, g);   // hover is delegated; see onHover()
+    gMets.appendChild(g);
+  }
+
+  // reactions
+  for(const [k, n] of L.nodes){
+    if(n.kind !== "r") continue;
+    if(!vis(k)) continue;
+    const d = n.data;
+    const color = PAL[d.design] != null ? PAL[d.design] : PAL[""];
+    const cof = L.cofactorOnly.has(d.id);
+    const isKO = state.ko.has(d.id);
+    const g = el("g", {class:"rgroup" + (state.sel === d.id ? " sel" : "") +
+      (dimK(k) ? " dim" : "") + (cof ? " cofonly" : "") + (isKO ? " ko" : "")});
+    // invisible hit area -- a 3px spine is far too thin to click reliably
+    g.appendChild(el("rect", {x:n.x-RW-6, y:n.y-11, width:2*RW+12, height:22,
+      fill:"transparent", stroke:"none"}));
+    if(L.spineNode.has(d.id)){
+      g.appendChild(el("line", {x1:n.x-RW, y1:n.y, x2:n.x+RW, y2:n.y,
+        stroke:PAL._accent, "stroke-width":8.5, "stroke-linecap":"round", opacity:.18}));
+    }
+    if(d.is_target || d.is_source){
+      g.appendChild(el("rect", {class:"anchor-ring", x:n.x-RW-5, y:n.y-9, width:2*RW+10,
+        height:18, rx:4, stroke: d.is_target ? PAL._tgt : PAL._src,
+        "stroke-width":1.2}));
+    }
+    const sp = el("line", {class:"rspine", x1:n.x-RW, y1:n.y, x2:n.x+RW, y2:n.y,
+      stroke:color, "stroke-width": d.repair_added ? 4.5 : 3.4});
+    if(d.repair_added) sp.setAttribute("stroke-dasharray", "4 2.5");
+    g.appendChild(sp);
+    g.appendChild(el("path", {d:`M${n.x+RW-1},${n.y-3.4} L${n.x+RW+4.6},${n.y} L${n.x+RW-1},${n.y+3.4} z`,
+      fill:color}));
+    if(isKO){
+      // struck-through + ringed: this reaction is deleted by the selected KO design
+      g.appendChild(el("rect", {class:"korim", x:n.x-RW-5, y:n.y-9, width:2*RW+10,
+        height:18, rx:4}));
+      g.appendChild(el("line", {class:"koslash", x1:n.x-7, y1:n.y-6, x2:n.x+7, y2:n.y+6}));
+      g.appendChild(el("line", {class:"koslash", x1:n.x-7, y1:n.y+6, x2:n.x+7, y2:n.y-6}));
+    }
+    if(state.labels){
+      const t = el("text", {class:"rlabel", x:n.x, y:n.y - 7});
+      t.textContent = d.id; g.appendChild(t);
+    }
+    g.addEventListener("click", ev => { ev.stopPropagation(); state.sel = d.id; render(); showDetail(d); });
+    g.__key = k; L.dom.set(k, g);   // hover is delegated; see onHover()
+    gRxns.appendChild(g);
+  }
+  applyTransform();
+}
+
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmt(v){ if(v == null) return "--";
+  const a = Math.abs(v); if(a === 0) return "0";
+  return (a < 0.001 || a >= 10000) ? v.toExponential(2) : v.toPrecision(4).replace(/\.?0+$/,""); }
+
+/* ---------------- hover annotation ----------------
+   Hover is DELEGATED to the <svg> root rather than bound per node, for three
+   reasons that each broke the old per-<g> mousemove listeners:
+     1. the pan handler calls setPointerCapture() on the svg, and while a pointer
+        is captured the boundary events (mouseover/mouseleave) are suppressed and
+        mouse events are retargeted to the capture element -- so listeners on the
+        child <g> stop firing;
+     2. render() rebuilds every node, so per-node listeners die on each re-render
+        (selection, a toggle, a theme switch) and the tooltip stays blank until the
+        pointer moves again;
+     3. the drawn hit targets are 3-8 user units wide, which at a fitted zoom of
+        k~0.1 is sub-pixel -- there was often nothing to land on at all.
+   So: one listener, and if the pointer is not directly over a node we fall back to
+   a nearest-node search in LAYOUT space with a tolerance converted from a fixed
+   screen-pixel radius. That makes a node hoverable at any zoom level. */
+const PICK_PX = 14;             // screen-space grab radius for the nearest-node fallback
+let hoverEl = null;             // currently highlighted <g>, so we can unmark it
+
+function nodeAt(ev){
+  const L = state.layout; if(!L) return null;
+  // 1. direct hit -- the pointer is genuinely over a drawn node
+  const t = ev.target;
+  if(t && t.closest){
+    const g = t.closest(".rgroup, .mnode");
+    if(g && g.__key != null && L.nodes.has(g.__key)) return g.__key;
+  }
+  // 2. nearest-node fallback, in layout units
+  const r = svg.getBoundingClientRect();
+  const lx = (ev.clientX - r.left - state.tx) / state.k;
+  const ly = (ev.clientY - r.top - state.ty) / state.k;
+  const tol = PICK_PX / state.k;
+  let best = null, bestD = tol;
+  for(const [k, n] of L.nodes){
+    if(!L.dom.has(k)) continue;              // not drawn under the current filters
+    const dy = Math.abs(n.y - ly);
+    if(dy > bestD) continue;
+    // a reaction is a segment of half-length RW; a metabolite is a point
+    const dx = n.kind === "r" ? Math.max(0, Math.abs(n.x - lx) - RW) : Math.abs(n.x - lx);
+    const d = Math.hypot(dx, dy);
+    if(d < bestD){ bestD = d; best = k; }
+  }
+  return best;
+}
+
+function tipHTML(n){
+  if(n.kind === "m"){
+    const m = n.data, C = m.C || 0;
+    return `<div class="id">${esc(n.id)}</div>` +
+      `<div class="nm">${esc(m.name || "")}</div>` +
+      `<dl class="ann">` +
+        (m.formula ? `<dt>Formula</dt><dd>${esc(m.formula)}</dd>` : "") +
+        `<dt>Carbons</dt><dd>${C}</dd>` +
+        (m.compartment ? `<dt>Compartment</dt><dd>${esc(m.compartment)}</dd>` : "") +
+        `<dt>Role</dt><dd>${m.currency ? "currency" : "carbon carrier"}</dd>` +
+      `</dl>`;
+  }
+  const d = n.data;
+  const color = `var(${TAGCOLOR[d.design] || "--t-untagged"})`;
+  const range = (d.v_min == null && d.v_max == null)
+    ? null : `${fmt(d.v_min)} .. ${fmt(d.v_max)}`;
+  return `<div class="id">${esc(d.id)}</div>` +
+    `<div class="nm">${esc(d.name || "")}</div>` +
+    `<div class="tag" style="color:${color}">${esc(d.design || "untagged")}` +
+      `${d.cls ? ` &middot; ${esc(d.cls)}` : ""}</div>` +
+    `<dl class="ann">` +
+      `<dt>Flux in v*</dt><dd>${fmt(d.flux)}</dd>` +
+      (range ? `<dt>FVA range</dt><dd>${range}</dd>` : "") +
+      (d.coupling == null ? "" : `<dt>Coupling</dt><dd>${d.coupling.toFixed(3)}</dd>`) +
+      `<dt>Bounds</dt><dd>${fmt(d.lower_bound)} .. ${fmt(d.upper_bound)}</dd>` +
+      `<dt>Subsystem</dt><dd>${esc(d.subsystem || "--")}</dd>` +
+    `</dl>` +
+    (state.ko.has(d.id) ? `<div class="ko">knocked out in design #${state.koRank}</div>` : "") +
+    (d.is_target ? `<div class="tag" style="color:var(--anchor-tgt)">target demand</div>` : "") +
+    (d.is_source ? `<div class="tag" style="color:var(--anchor-src)">carbon source</div>` : "") +
+    (d.repair_added ? `<div class="tag" style="color:var(--t-repair)">added by repair</div>` : "") +
+    (state.layout && state.layout.cofactorOnly.has(d.id)
+      ? `<div class="nm">links to H only through cofactors</div>` : "") +
+    (d.gene_rule ? `<div class="gr">${esc(d.gene_rule)}</div>` : "");
+}
+
+function onHover(ev){
+  if(drag && drag.moved){ hideTip(); return; }   // don't fight a pan
+  const key = nodeAt(ev);
+  const L = state.layout;
+  if(key == null || !L){ hideTip(); return; }
+  const g = L.dom.get(key);
+  if(g !== hoverEl){
+    if(hoverEl) hoverEl.classList.remove("hovered");
+    if(g) g.classList.add("hovered");
+    hoverEl = g || null;
+  }
+  showTip(ev, tipHTML(L.nodes.get(key)));
+}
+
+function showTip(ev, html){
+  tip.innerHTML = html;
+  tip.classList.add("on");
+  // measure after fill: the annotation block makes the height content-dependent,
+  // so a fixed guess would push it off the canvas on the tall reaction tooltips.
+  const r = canvas.getBoundingClientRect();
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let x = ev.clientX - r.left + 14, y = ev.clientY - r.top + 12;
+  if(x + tw > r.width - 4) x = ev.clientX - r.left - tw - 12;
+  if(y + th > r.height - 4) y = ev.clientY - r.top - th - 10;
+  tip.style.left = Math.max(4, x) + "px";
+  tip.style.top = Math.max(4, y) + "px";
+}
+function hideTip(){
+  tip.classList.remove("on");
+  if(hoverEl){ hoverEl.classList.remove("hovered"); hoverEl = null; }
+}
+
+/* ---------------- pan / zoom ---------------- */
+function applyTransform(){
+  if(root) root.setAttribute("transform", `translate(${state.tx},${state.ty}) scale(${state.k})`);
+}
+function fit(){
+  const L = state.layout; if(!L) return;
+  const r = svg.getBoundingClientRect();
+  const w = L.bbox.x1 - L.bbox.x0, h = L.bbox.y1 - L.bbox.y0;
+  const pad = 54;
+  state.k = Math.min((r.width - 24) / Math.max(w, 1), (r.height - pad - 24) / Math.max(h, 1), 2.4);
+  state.k = Math.max(state.k, 0.06);
+  state.tx = (r.width - w * state.k) / 2 - L.bbox.x0 * state.k;
+  state.ty = (r.height + pad - h * state.k) / 2 - L.bbox.y0 * state.k;
+  applyTransform();
+}
+let drag = null;
+const DRAG_PX = 4;   // below this the gesture is a click, not a pan
+
+svg.addEventListener("pointerdown", e => {
+  drag = {x:e.clientX, y:e.clientY, tx:state.tx, ty:state.ty, id:e.pointerId, moved:false};
+});
+svg.addEventListener("pointermove", e => {
+  if(drag){
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if(!drag.moved && Math.hypot(dx, dy) > DRAG_PX){
+      // Capture only once this is really a pan. Capturing on pointerdown made every
+      // click swallow the hover events for the rest of the gesture.
+      drag.moved = true; svg.classList.add("drag"); hideTip();
+      try{ svg.setPointerCapture(e.pointerId); }catch(_){}
+    }
+    if(drag.moved){
+      state.tx = drag.tx + dx; state.ty = drag.ty + dy; applyTransform();
+      return;
+    }
+  }
+  onHover(e);
+});
+function endDrag(e){
+  if(drag && drag.moved){
+    try{ svg.releasePointerCapture(drag.id); }catch(_){}
+  }
+  const wasPan = !!(drag && drag.moved);
+  drag = null; svg.classList.remove("drag");
+  return wasPan;
+}
+svg.addEventListener("pointerup", e => { svg.__panned = endDrag(e); });
+// Without these a cancelled gesture (pointer lost, context menu, touch cancel) left
+// `drag` set and pointer capture held, and hover stayed dead until the next click.
+svg.addEventListener("pointercancel", endDrag);
+svg.addEventListener("lostpointercapture", () => { if(drag) drag.moved = false; });
+svg.addEventListener("pointerleave", hideTip);
+svg.addEventListener("wheel", e => {
+  e.preventDefault();
+  hideTip();
+  const r = svg.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const f = Math.exp(-e.deltaY * 0.0016);
+  const nk = Math.min(6, Math.max(0.05, state.k * f));
+  state.tx = mx - (mx - state.tx) * (nk / state.k);
+  state.ty = my - (my - state.ty) * (nk / state.k);
+  state.k = nk; applyTransform();
+}, {passive:false});
+svg.addEventListener("click", () => {
+  if(svg.__panned){ svg.__panned = false; return; }   // that click was the end of a pan
+  state.sel = null; render();
+  if(state.koRow) showKODetail(); else showDetail(null);
+});
+document.getElementById("z-in").onclick = () => { state.k = Math.min(6, state.k * 1.25); applyTransform(); };
+document.getElementById("z-out").onclick = () => { state.k = Math.max(0.05, state.k / 1.25); applyTransform(); };
+document.getElementById("z-fit").onclick = fit;
+
+/* ---------------- inspector ---------------- */
+function showDetail(d){
+  const box = document.getElementById("detail");
+  if(!d){ box.innerHTML = '<p class="empty">Click a reaction on the map.</p>'; return; }
+  const color = `var(${TAGCOLOR[d.design] || "--t-untagged"})`;
+  const rows = [
+    ["Design tag", `<span style="color:${color};font-weight:600">${esc(d.design||"untagged")}</span>`],
+    ["FVA class", esc(d.cls || "--")],
+    ["Coupling to target", d.coupling == null ? "--" : d.coupling.toFixed(3)],
+    ["Flux in v*", fmt(d.flux)],
+    ["FVA range", (d.v_min == null ? "--" : `${fmt(d.v_min)} .. ${fmt(d.v_max)}`)],
+    ["Subsystem", esc(d.subsystem || "--")],
+    ["Bounds", `${fmt(d.lower_bound)} .. ${fmt(d.upper_bound)}`],
+  ];
+  if(state.ko.has(d.id))
+    rows.unshift(["Knockout", `<span class="pill ok">deleted in design #${state.koRank}</span>`]);
+  if(d.repair_added) rows.unshift(["Origin", '<span class="pill warn">added by repair</span>']);
+  if(d.is_target) rows.unshift(["Role", '<span class="pill bad">target demand</span>']);
+  if(d.is_source) rows.unshift(["Role", '<span class="pill ok">carbon source</span>']);
+  box.innerHTML =
+    `<div class="rid">${esc(d.id)}</div><div class="rname">${esc(d.name||"")}</div>` +
+    `<dl class="kv">${rows.map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>` +
+    (d.gene_rule ? `<div class="gr">${esc(d.gene_rule)}</div>` : "");
+}
+
+function showStatsDesignOnly(p){
+  const dr = p.design_result || {}, pr = dr.provenance || {};
+  const rows = [
+    ["Engine", '<span class="pill ok">OptKnock</span>'],
+    ["Secreted target", `<span class="mono">${esc(p.target_met)}</span>`],
+    ["Product exchange", `<span class="mono">${esc(p.target_id || "--")}</span>`],
+    ["Substrate", `<span class="mono">${esc((p.source_ids||[]).join(", ") || "--")}</span>`],
+    ["Wild-type growth", pr.wild_type_growth == null ? "--" : fmt(pr.wild_type_growth) + " 1/h"],
+    ["Buildable designs", `${pr.n_buildable != null ? pr.n_buildable : (dr.n_designs||0)} / ${pr.n_total != null ? pr.n_total : "--"}`],
+    ["Solver", esc(pr.solver || "GLPK / HiGHS")],
+  ];
+  if(pr.by_k) rows.push(["Designs by k",
+    Object.keys(pr.by_k).sort().map(k => `k${k}:${pr.by_k[k]}`).join("  ")]);
+  document.getElementById("stats").innerHTML =
+    rows.map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  document.getElementById("legend").innerHTML =
+    `<p class="legnote">No corridor is drawn for a secreted-product design; the ` +
+    `knockout front is in the strain-design panel.</p>`;
+}
+
+function showStats(p){
+  if(p.design_only) return showStatsDesignOnly(p);
+  const conn = p.connected_post
+    ? (p.connected_pre ? '<span class="pill ok">connected</span>'
+                       : '<span class="pill warn">repaired</span>')
+    : '<span class="pill bad">disconnected</span>';
+  const rows = [
+    ["Carbon source", `<span class="mono">${esc(p.source_ids.join(", ") || "--")}</span>`],
+    ["Target demand", `<span class="mono">${esc(p.target_id)}</span>`],
+    ["Source &rarr; target", conn],
+    ["Reactions in H", p.n_H],
+    ["Active MFG |F|", p.n_active],
+    ["H / F", p.h_over_active.toFixed(3)],
+    ["Consistent universe", p.n_consistent],
+    ["Repair added", p.repair_added.length],
+    ["Max target flux v*", fmt(p.v_star_target)],
+    ["Operating point", "f = " + p.operating_point],
+  ];
+  document.getElementById("stats").innerHTML =
+    rows.map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+
+  const counts = {};
+  for(const r of p.reactions) counts[r.design||""] = (counts[r.design||""]||0) + 1;
+  const leg = TAGS.map(([key,label,varname]) =>
+    `<div class="legrow"><span class="sw" style="border-top-color:var(${varname})"></span>` +
+    `<span class="lb">${label}</span><span class="cnt">${counts[key]||0}</span></div>`).join("") +
+    (p.repair_added.length
+      ? `<div class="legrow"><span class="sw" style="border-top-color:var(--t-repair);border-top-style:dashed"></span>` +
+        `<span class="lb">Repair-added</span><span class="cnt">${p.repair_added.length}</span></div>` : "");
+  const spN = state.layout && state.layout.spine ? state.layout.spine.length : 0;
+  const cofN = state.layout ? state.layout.cofactorOnly.size : 0;
+  document.getElementById("legend").innerHTML = leg +
+    (spN ? `<div class="legrow"><span class="sw" style="border-top-color:var(--accent);border-top-width:4px"></span>` +
+           `<span class="lb">Dominant-flux route</span><span class="cnt">${spN}</span></div>` : "") +
+    (cofN && !state.currency
+      ? `<div class="legrow"><span class="sw" style="border-top-color:var(--t-untagged);opacity:.42"></span>` +
+        `<span class="lb">Cofactor-linked only</span><span class="cnt">${cofN}</span></div>` : "");
+}
+
+/* ---------------- strain design (tool-layer design_table view) ----------------
+   The atlas carries the design engine's OUTPUT, not the engine: the tool layer is a
+   Python service and a published artifact's CSP blocks every outbound request, so
+   scripts/export_design_results.py runs design_strains + design_table/design_csv
+   ahead of time and the builder inlines the result. `columns` is the engine's own
+   self-describing schema (report.py COLUMNS), so this grid is built from the data --
+   add a column upstream and it appears here with no change to this file. */
+const drawer = document.getElementById("drawer");
+const dbody  = document.getElementById("dbody");
+const dsum   = document.getElementById("dsum");
+const dclear = document.getElementById("d-clear");
+const btnDesign = document.getElementById("tg-design");
+const btnCSV = document.getElementById("d-csv");
+const btnCopy = document.getElementById("d-copy");
+
+function clearKO(){
+  state.koRow = null; state.koRank = null; state.ko = new Set();
+  dclear.hidden = true;
+  dbody.querySelectorAll("tr.on").forEach(tr => tr.classList.remove("on"));
+}
+
+function cellHTML(col, row){
+  const v = row[col.key];
+  if(col.key === "knockouts"){
+    // a KO can sit outside the drawn corridor H -- mark which ones are on this map
+    const inH = new Set((state.pair.reactions || []).map(r => r.id));
+    return v.map(id => `<span class="kochip${inH.has(id) ? "" : " off"}" title="${
+      inH.has(id) ? "on this map" : "not in this corridor"}">${esc(id)}</span>`).join("");
+  }
+  if(v == null) return "--";
+  return col.type === "float" ? esc(fmt(v)) : esc(v);
+}
+
+function sortedRows(dr){
+  const rows = dr.rows.slice();
+  if(!state.sortKey) return rows;
+  rows.sort((a, b) => {
+    let x = a[state.sortKey], y = b[state.sortKey];
+    if(Array.isArray(x)){ x = x.length; y = y.length; }
+    if(x === y) return a.rank - b.rank;
+    return (x > y ? 1 : -1) * state.sortDir;
+  });
+  return rows;
+}
+
+function renderDesignGrid(dr){
+  const head = dr.columns.map(c => {
+    const arrow = state.sortKey === c.key ? (state.sortDir > 0 ? "&#9650;" : "&#9660;") : "";
+    return `<th data-key="${esc(c.key)}"${c.axis ? ' class="axis" title="Pareto axis"' : ""}>` +
+      `${esc(c.label)}${c.unit ? ` <span class="u">${esc(c.unit)}</span>` : ""}` +
+      `<span class="ar">${arrow}</span></th>`;
+  }).join("");
+  const body = sortedRows(dr).map(r =>
+    `<tr data-rank="${r.rank}"${state.koRank === r.rank ? ' class="on"' : ""}>` +
+    dr.columns.map(c =>
+      `<td class="${c.key === "knockouts" ? "kos" : (c.numeric ? "num" : "")}">` +
+      `${cellHTML(c, r)}</td>`).join("") + `</tr>`).join("");
+  const okNote =
+    `Verified growth-coupled knockout designs from the <b>OptKnock</b> engine ` +
+    `(<code>src/optknock</code>): each set forces production of the secreted target ` +
+    `above zero at maximum growth. Only <b>buildable</b> designs (a gene-deletion set ` +
+    `realizes the reaction knockouts) are shown. The three trade-off axes are ` +
+    `highlighted. Rows are sorted by the <b>engine's Pareto rank</b> ` +
+    `(<code>Front</code> / <code>Engine rank</code>); <code>#</code> is the global ` +
+    `index over that order. There is no corridor map for a secreted target, so the ` +
+    `knockout chips are not overlaid.`;
+  const fpNote =
+    `Verified, non-dominated growth-coupled knockout designs from the ` +
+    `KO-only design engine, rendered through the tool layer's own <code>design_table</code> ` +
+    `view. The three Pareto axes are highlighted; there is deliberately no composite ` +
+    `score, so <code>#</code> is display order, not a ranking. Click a row to overlay its ` +
+    `knockouts on the map.`;
+  dbody.innerHTML =
+    `<p class="dnote">${dr.engine === "optknock" ? okNote : fpNote}` +
+    (dr.prune && dr.prune.n_pruned
+      ? ` <b>${dr.prune.n_pruned}</b> trivial knockout candidates (exchange, ` +
+        `cofactor-only, transport) were removed before the search, leaving ` +
+        `<b>${dr.prune.n_candidates_pruned}</b>.`
+      : "") + `</p>` +
+    `<table class="dgrid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+
+  dbody.querySelectorAll("th").forEach(th => th.addEventListener("click", () => {
+    const k = th.dataset.key;
+    if(state.sortKey === k) state.sortDir = -state.sortDir;
+    else { state.sortKey = k; state.sortDir = 1; }
+    renderDesignGrid(dr);
+  }));
+  dbody.querySelectorAll("tbody tr").forEach(tr => tr.addEventListener("click", () => {
+    const rank = Number(tr.dataset.rank);
+    if(state.koRank === rank){
+      clearKO(); render(); showDetail(null); return;
+    }
+    const row = dr.rows.find(r => r.rank === rank);
+    state.koRow = row; state.koRank = rank; state.ko = new Set(row.knockouts);
+    dbody.querySelectorAll("tr.on").forEach(x => x.classList.remove("on"));
+    tr.classList.add("on");
+    dclear.hidden = false;
+    render(); showKODetail();
+  }));
+}
+
+function showKODetail(){
+  const row = state.koRow;
+  if(!row){ showDetail(null); return; }
+  const inH = new Set((state.pair.reactions || []).map(r => r.id));
+  const hit = row.knockouts.filter(id => inH.has(id));
+  const rows = [
+    ["KO count", row.ko_count],
+    ["Guaranteed floor", fmt(row.guaranteed_floor)],
+    ["Max product @ growth", fmt(row.yield_or_titer)],
+    ["Threshold", fmt(row.threshold_used)],
+    ["Margin over threshold", fmt(row.floor_margin)],
+    ["Tier", row.tier],
+    ["KOs on this map", `${hit.length} / ${row.knockouts.length}`],
+  ];
+  document.getElementById("detail").innerHTML =
+    `<div class="rid">Design #${row.rank}</div>` +
+    `<div class="rname">verified growth-coupled knockout set</div>` +
+    `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>` +
+    `<div class="gr">${row.knockouts.map(id =>
+      `${esc(id)} &mdash; ${esc(row.coupling_provenance[id] || "candidate")}`).join("<br>")}</div>`;
+}
+
+function showDesign(pair){
+  const dr = pair.design_result;
+  clearKO();
+  state.sortKey = null; state.sortDir = 1;
+  const prov = document.getElementById("provsect");
+  if(!dr){                                   // this pair was never run through the engine
+    drawer.hidden = true; btnDesign.hidden = true; prov.hidden = true;
+    return;
+  }
+  drawer.hidden = false; btnDesign.hidden = false;
+
+  if(dr.status !== "ok"){
+    dsum.innerHTML = `<b>no growth-coupled design</b>`;
+    dbody.innerHTML = `<p class="dnote">The engine ran and terminated without a design: ` +
+      `<code>${esc(dr.reason || "")}</code>` + (dr.hint ? `<br>${esc(dr.hint)}` : "") +
+      `<br><br>This is a reported outcome, not a failure to run &mdash; at this floor ` +
+      `and intervention budget no knockout set makes the product growth-coupled in ` +
+      `this organism.</p>` +
+      (dr.tier_failures
+        ? `<dl class="kv">` + Object.keys(dr.tier_failures).sort().map(t =>
+            `<dt>Tier ${esc(t)}</dt><dd class="mono" style="text-align:left">` +
+            `${esc(dr.tier_failures[t])}</dd>`).join("") + `</dl>`
+        : "") +
+      (dr.prune && dr.prune.n_pruned
+        ? `<p class="dnote">The search still had <b>${dr.prune.n_candidates_pruned}</b> ` +
+          `candidate reactions after <b>${dr.prune.n_pruned}</b> trivial ones ` +
+          `(exchange, cofactor-only, transport) were pruned.</p>`
+        : "");
+    prov.hidden = true;
+    btnCSV.disabled = true; btnCopy.disabled = true;
+    return;
+  }
+  btnCSV.disabled = false; btnCopy.disabled = false;
+
+  const best = dr.rows.reduce((a, r) => Math.max(a, r.guaranteed_floor), 0);
+  const minKO = dr.rows.reduce((a, r) => Math.min(a, r.ko_count), Infinity);
+  dsum.innerHTML = `<b>${dr.n_designs}</b> verified design${dr.n_designs === 1 ? "" : "s"}` +
+    ` &middot; best floor <b>${fmt(best)}</b> mmol/gDW/h` +
+    ` &middot; from <b>${minKO}</b> KO${minKO === 1 ? "" : "s"}` +
+    ` &middot; ${dr.engine === "optknock" ? "OptKnock k&le;3" : tierLabel(dr)}`;
+  renderDesignGrid(dr);
+
+  const p = dr.provenance || {};
+  if(dr.engine === "optknock"){
+    const bk = p.by_k ? Object.keys(p.by_k).sort().map(k => `k${k}:${p.by_k[k]}`).join("  ") : "--";
+    document.getElementById("prov").innerHTML = [
+      ["Engine", '<span class="pill ok">OptKnock</span>'],
+      ["Secreted target", `<span class="mono">${esc(p.target_met || "--")}</span>`],
+      ["Product exchange", `<span class="mono">${esc(p.target_rxn || "--")}</span>`],
+      ["Substrate", `<span class="mono">${esc(p.substrate || "--")}</span>`],
+      ["Wild-type growth", p.wild_type_growth == null ? "--" : fmt(p.wild_type_growth) + " 1/h"],
+      ["Buildable designs", `${p.n_buildable != null ? p.n_buildable : dr.n_designs} / ${p.n_total != null ? p.n_total : "--"}`],
+      ["Designs by k", bk],
+      ["Max knockouts", dr.params ? dr.params.max_knockouts : "--"],
+      ["Solver", esc(p.solver || (dr.params && dr.params.solver) || "GLPK / HiGHS")],
+    ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+    document.getElementById("guarantee").textContent = dr.guarantee_label || "";
+    prov.hidden = false;
+    return;
+  }
+
+  // provenance + the honest guarantee label, in the inspector
+  const provRows = [
+    ["Tier", dr.params.tier],
+    ["Floor fraction", dr.params.floor_fraction],
+    ["Max interventions", dr.params.max_interventions],
+    ["Wild-type v*", fmt(p.v_star_target)],
+    ["Threshold", fmt(p.threshold)],
+    ["Reactions", p.n_reactions],
+    ["Consistent |F|", p.n_F],
+    ["Protect-masked", p.n_masked],
+    ["KO candidates", p.n_candidates],
+    ["Evaluated", p.n_evaluated],
+    ["Verified", p.n_verified],
+    ["Pareto front", p.n_front],
+    ["Biomass", `<span class="mono">${esc(p.biomass_id || "--")}</span>`],
+    ["F source", esc(p.F_source || "--")],
+    ["Runtime", dr.elapsed_s == null ? "--" : dr.elapsed_s + " s"],
+  ];
+  if(dr.prune && dr.prune.n_pruned){
+    // the search never saw these -- they were removed at the protect-mask, so the
+    // front is non-dominated over reactions that are actually worth knocking out
+    provRows.splice(5, 0,
+      ["Trivial KOs pruned", dr.prune.n_pruned],
+      ["Candidates after prune", dr.prune.n_candidates_pruned]);
+  }
+  const sizes = p.tier_front_sizes;
+  if(sizes) provRows.push(["Designs by tier",
+    Object.keys(sizes).sort().map(t => `T${t}:${sizes[t]}`).join("  ")]);
+  if(p.tier_failures) for(const t of Object.keys(p.tier_failures).sort())
+    provRows.push([`Tier ${t}`, `<span class="pill warn">no designs</span>`]);
+  if(usesTier2(dr)){
+    provRows.push(["MILP solver", esc(p.solver || dr.params.solver || "auto")]);
+    if(p.scip_version) provRows.push(["SCIP", esc(p.scip_version)]);
+    if(p.milp_status) provRows.push(["MILP status", esc(p.milp_status)]);
+    provRows.push(["Time limit", dr.params.milp_time_limit_s + " s"]);
+    if(p.time_limited)
+      provRows.push(["Hit time limit", '<span class="pill warn">best incumbent</span>']);
+  }
+  document.getElementById("prov").innerHTML =
+    provRows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  document.getElementById("guarantee").textContent = dr.guarantee_label || "";
+  prov.hidden = false;
+}
+
+/* drawer open/close */
+function setDrawer(open){
+  drawer.classList.toggle("closed", !open);
+  document.getElementById("dhead").setAttribute("aria-expanded", String(open));
+  btnDesign.setAttribute("aria-pressed", String(open));
+  if(state.pair) fit();                       // the canvas just changed height
+}
+document.getElementById("dhead").addEventListener("click", ev => {
+  if(ev.target.closest("button.ctl")) return;   // the CSV buttons live in the header
+  setDrawer(drawer.classList.contains("closed"));
+});
+document.getElementById("dhead").addEventListener("keydown", ev => {
+  if(ev.key === "Enter" || ev.key === " "){
+    ev.preventDefault(); setDrawer(drawer.classList.contains("closed"));
+  }
+});
+btnDesign.addEventListener("click", () => setDrawer(drawer.classList.contains("closed")));
+dclear.addEventListener("click", () => { clearKO(); render(); showDetail(null); });
+
+/* CSV export. The engine already emits a correctly quoted CSV (report.design_csv), so
+   this hands over that exact string -- the atlas never re-serialises the numbers.
+   A page-initiated download is blocked in some sandboxed viewers, which is why
+   "Copy CSV" sits alongside it as the always-available path. */
+function currentCSV(){
+  const dr = state.pair && state.pair.design_result;
+  return dr && dr.status === "ok" ? dr.csv : "";
+}
+btnCSV.addEventListener("click", () => {
+  const csv = currentCSV(); if(!csv) return;
+  const name = `designs_${state.pair._id.replace(/[^A-Za-z0-9]+/g, "_")}.csv`;
+  const url = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8"}));
+  const a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+btnCopy.addEventListener("click", async ev => {
+  const csv = currentCSV(); if(!csv) return;
+  const btn = ev.currentTarget, old = btn.textContent;
+  try{
+    await navigator.clipboard.writeText(csv);
+  }catch(_){
+    const ta = document.createElement("textarea");   // clipboard API needs a secure context
+    ta.value = csv; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); }catch(__){}
+    ta.remove();
+  }
+  btn.textContent = "Copied"; setTimeout(() => { btn.textContent = old; }, 1200);
+});
+
+/* ---------------- selection ---------------- */
+const INDEX = new Map();
+DATA.organisms.forEach(o => o.pairs.forEach(p => { if(p.qualified) INDEX.set(p._id, {o, p}); }));
+
+function select(id){
+  const rec = INDEX.get(id); if(!rec) return;
+  state.pair = rec.p; state.sel = null;
+  document.querySelectorAll(".pair").forEach(b => b.classList.toggle("on", b.dataset.id === id));
+  document.getElementById("mtitle").textContent =
+    `${rec.o.key} — ${rec.p.target_met}`;
+  document.getElementById("msub").innerHTML = rec.p.design_only
+    ? `<b>${esc(rec.p.source_ids.join(", ") || "no source")}</b> &rarr; <b>${esc(rec.p.target_id)}</b>` +
+      ` &middot; ${esc(rec.o.organism || "")} &middot; OptKnock secreted-product design ` +
+      `&middot; ${rec.p.design_result ? rec.p.design_result.n_designs : 0} verified KO designs`
+    : `<b>${esc(rec.p.source_ids.join(", ") || "no source")}</b> &rarr; <b>${esc(rec.p.target_id)}</b>` +
+      ` &middot; ${esc(rec.o.organism || "")} &middot; ${rec.p.n_H} reactions, ${rec.p.edges.length} mass-flow edges`;
+  showDetail(null); showDesign(rec.p); render(); showStats(rec.p); fit();
+  if(rec.p.design_only) setDrawer(true);       // the design panel is the content here
+}
+
+/* ---------------- controls ---------------- */
+function toggle(btnId, key){
+  const b = document.getElementById(btnId);
+  b.addEventListener("click", () => {
+    state[key] = !state[key];
+    b.setAttribute("aria-pressed", String(state[key]));
+    render(); if(state.pair) showStats(state.pair); fit();
+  });
+}
+const btnHasDesign = document.getElementById("tg-hasdesign");
+btnHasDesign.addEventListener("click", () => {
+  state.onlyDesigned = !state.onlyDesigned;
+  btnHasDesign.setAttribute("aria-pressed", String(state.onlyDesigned));
+  buildRail(document.getElementById("q").value);
+});
+toggle("tg-currency", "currency");
+toggle("tg-corridor", "corridor");
+toggle("tg-labels", "labels");
+document.getElementById("btn-theme").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const dark = cur ? cur === "dark"
+    : window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+  render();
+});
+window.addEventListener("resize", () => { if(state.pair) fit(); });
+
+// The designs-only filter is only meaningful when a design run has been inlined;
+// a map-only build (no designs/ directory) never shows it.
+const ANY_DESIGN = DATA.organisms.some(o => o.pairs.some(p => nDesigns(p)));
+if(ANY_DESIGN) btnHasDesign.hidden = false;
+
+buildRail("");
+// Open on a pair that actually has a design front when there is one -- otherwise the
+// atlas opens on a pair whose design panel only says "none", which reads as broken.
+const first = [...INDEX.keys()].find(id => nDesigns(INDEX.get(id).p))
+           || [...INDEX.keys()][0];
+if(first) select(first);
+// The drawer starts open on a pair with designs, so the integration is visible without
+// hunting for it; closed otherwise, to leave the map its full height.
+if(first && nDesigns(INDEX.get(first).p)) setDrawer(true);
+})();
+</script>

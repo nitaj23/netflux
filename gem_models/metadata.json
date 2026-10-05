@@ -1,0 +1,112 @@
+{
+ "iAF692": {
+  "file_path": "gem_models/iAF692.json",
+  "model_id": "iAF692",
+  "slug": "m_barkeri",
+  "organism": "Methanosarcina barkeri",
+  "version": "1",
+  "num_metabolites": 628,
+  "num_reactions": 690,
+  "num_genes": 692
+ },
+ "iAF987": {
+  "file_path": "gem_models/iAF987.json",
+  "model_id": "iAF987",
+  "slug": "g_metallireducens",
+  "organism": "Geobacter metallireducens GS-15",
+  "version": "1",
+  "num_metabolites": 1109,
+  "num_reactions": 1285,
+  "num_genes": 987
+ },
+ "iCN1361": {
+  "file_path": "gem_models/iCN1361.json",
+  "model_id": "CnecH16",
+  "slug": "c_necator",
+  "organism": "Cupriavidus necator H16",
+  "version": "1",
+  "num_metabolites": 1265,
+  "num_reactions": 1292,
+  "num_genes": 1362
+ },
+ "iCTH669": {
+  "file_path": "gem_models/iCTH669_w_GLGC.json",
+  "model_id": "iCTH669",
+  "slug": "c_thermocellum",
+  "organism": "Clostridium thermocellum",
+  "version": "1",
+  "num_metabolites": 837,
+  "num_reactions": 913,
+  "num_genes": 670
+ },
+ "iJN1026": {
+  "file_path": "gem_models/iJN1026.json",
+  "model_id": "iJN1026",
+  "slug": "b_subtilis",
+  "organism": "Bacillus Subtilis",
+  "version": "1",
+  "num_metabolites": 1291,
+  "num_reactions": 1580,
+  "num_genes": 1020
+ },
+ "iJN1463": {
+  "file_path": "gem_models/iJN1463.json",
+  "model_id": "iJN1463",
+  "slug": "p_putida",
+  "organism": "Pseudomonas putida KT2440",
+  "version": "1",
+  "num_metabolites": 2153,
+  "num_reactions": 2927,
+  "num_genes": 1462
+ },
+ "iJN678": {
+  "file_path": "gem_models/iJN678.json",
+  "model_id": "iJN678",
+  "slug": "s_sp_pcc6803",
+  "organism": "Synechocystis sp. PCC 6803",
+  "version": "1",
+  "num_metabolites": 795,
+  "num_reactions": 863,
+  "num_genes": 622
+ },
+ "iLB1027": {
+  "file_path": "gem_models/iLB1027.json",
+  "model_id": "iLB1027_lipid",
+  "slug": "p_tricornutum",
+  "organism": "Phaeodactylum tricornutum",
+  "version": "1",
+  "num_metabolites": 2172,
+  "num_reactions": 4456,
+  "num_genes": 1027
+ },
+ "iML1515": {
+  "file_path": "gem_models/iML1515.json",
+  "model_id": "iML1515",
+  "slug": "e_coli",
+  "organism": "Escherichia coli K-12 MG1655",
+  "version": "1",
+  "num_metabolites": 1877,
+  "num_reactions": 2712,
+  "num_genes": 1516
+ },
+ "iMM904": {
+  "file_path": "gem_models/iMM904.json",
+  "model_id": "iMM904",
+  "slug": "s_cerevisiae",
+  "organism": "Saccharomyces cerevisiae S288C",
+  "version": "1",
+  "num_metabolites": 1226,
+  "num_reactions": 1577,
+  "num_genes": 905
+ },
+ "iNF517": {
+  "file_path": "gem_models/iNF517.json",
+  "model_id": "iNF517",
+  "slug": "l_lactis",
+  "organism": "Lactococcus lactis subsp. cremoris MG1363",
+  "version": "1",
+  "num_metabolites": 650,
+  "num_reactions": 754,
+  "num_genes": 516
+ }
+}
