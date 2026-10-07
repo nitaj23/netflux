@@ -46,11 +46,10 @@ from dataclasses import dataclass
 from typing import Any, ContextManager, Protocol, Sequence, runtime_checkable
 
 import cobra
-import torch
 
 from src import db as _db
 from src.graph_ops import (
-    build_mfg, graph_json, graphml_bytes, run_fba, to_pyg)
+    build_mfg, graph_json, graphml_bytes, run_fba)
 from src.schema import Condition, Model
 from src.extraction.gudie import GudieConfig
 from src.extraction.pathway import (
@@ -552,7 +551,7 @@ def compute_mfg(source: dict, params: dict, *, output_format: str = "stats_json"
                 keep_in_session: bool = False) -> dict:
     """Resolve -> apply_overrides -> FBA/pFBA -> build_mfg -> in-memory artifact.
 
-    output_format in {"graphml", "pyg", "fba_json", "stats_json"}. When
+    output_format in {"graphml", "fba_json", "stats_json"}. When
     keep_in_session=True the recipe (source + overrides) is memoized under a
     session_token returned in the result for later replay. Nothing is persisted.
     `source.overrides` and `params` are both applied (source.overrides first).
@@ -569,17 +568,13 @@ def compute_mfg(source: dict, params: dict, *, output_format: str = "stats_json"
     }
     if output_format == "graphml":
         out["graphml"] = graphml_bytes(G)
-    elif output_format == "pyg":
-        buf = io.BytesIO()
-        torch.save(to_pyg(G), buf)
-        out["pyg"] = buf.getvalue()
     elif output_format == "fba_json":
         out["fba_json"] = {r: float(f) for r, f in sol.fluxes.items()}
     elif output_format == "stats_json":
         out["graph_json"] = graph_json(G)
     else:
         raise ToolError(f"unknown output_format {output_format!r}",
-                        hint="one of graphml, pyg, fba_json, stats_json")
+                        hint="one of graphml, fba_json, stats_json")
 
     if keep_in_session:
         recipe = {"source_ref": source, "overrides": params}

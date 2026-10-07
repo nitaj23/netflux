@@ -5,5 +5,6 @@ mfghub.db-wal
 .venv/
 __pycache__/
 *.pyc
+*.pt
 tests/
 .pytest_cache/

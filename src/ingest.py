@@ -9,9 +9,9 @@ load_model_with_condition apply DB-resolved condition bounds to cached model cop
 index_gem_and_mfg         populate all 4 membership tables + MFGEntry record
 ingest_gem                top-level orchestrator (condition → files → DB)
 
-build_mfg, run_fba, to_pyg live in graph_ops.py and are re-exported
+build_mfg, run_fba live in graph_ops.py and are re-exported
 here for the compute.py import line:
-    from src.ingest import run_fba, build_mfg, to_pyg
+    from src.ingest import run_fba, build_mfg
 """
 
 from __future__ import annotations
@@ -24,10 +24,9 @@ from pathlib import Path
 import cobra
 import networkx as nx
 import numpy as np
-import torch
 from sqlalchemy.orm import Session
 
-from src.graph_ops import to_pyg, build_mfg, run_fba, write_graphml
+from src.graph_ops import build_mfg, run_fba, write_graphml
 from src.schema import (
     Condition,
     EntryMetabolite,
@@ -49,7 +48,6 @@ logger = logging.getLogger(__name__)
 # Re-export so compute.py can keep its single import line unchanged
 __all__ = [
     "make_entry_id", "run_fba", "build_mfg",
-    "to_pyg",
     "load_model_with_condition", "index_gem_and_mfg", "ingest_gem",
 ]
 
@@ -328,7 +326,7 @@ def ingest_gem(
     """
     Full ingest pipeline for a single GEM under a canonical DB condition.
     Call only for default-FBA entries qualifying for repo storage.
-    Ephemeral tool-layer graphs use build_mfg / run_fba / to_pyg directly
+    Ephemeral tool-layer graphs use build_mfg / run_fba directly
     via compute.py and must never call ingest_gem().
     """
 
@@ -375,7 +373,6 @@ def ingest_gem(
 
     # ── 5. Graph construction ────────────────────────────────────────────────
     G        = build_mfg(cobra_model, solution)
-    pyg_data = to_pyg(G)
 
     # Graph stats for the return payload / logs only (never persisted — the
     # MFGEntry row computes its own counts). Derived directly from G:
@@ -392,11 +389,9 @@ def ingest_gem(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     graphml_path      = str(out_dir / f"{entry_id}.graphml")
-    pyg_path          = str(out_dir / f"{entry_id}.pt")
     fba_solution_path = str(out_dir / f"{entry_id}_fba.json")
 
     write_graphml(G, graphml_path)
-    torch.save(pyg_data, pyg_path)
     Path(fba_solution_path).write_text(
         json.dumps({
             "objective_value": float(solution.objective_value),  # key preserved
@@ -416,7 +411,6 @@ def ingest_gem(
         condition_id_fk=cond_row.id,
         db=db,
         graphml_path=graphml_path,
-        pyg_path=pyg_path,
         fba_solution_path=fba_solution_path,
     )
 
@@ -431,7 +425,6 @@ def ingest_gem(
         "model_id":            model_row.id,
         "condition_id":        condition_id,
         "graphml_path":        graphml_path,
-        "pyg_path":            pyg_path,
         "fba_solution_path":   fba_solution_path,
         "n_nodes":             n_nodes,
         "n_edges":             n_edges,

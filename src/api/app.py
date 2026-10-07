@@ -113,9 +113,9 @@ async def _handle_domain_error(request: Request, exc: Exception) -> JSONResponse
 
 # ── Serialisation of in-memory artifacts ─────────────────────────────────────
 def _mfg_payload(out: dict) -> dict:
-    """Base64 the binary GraphML/PyG blobs; everything else passes through."""
+    """Base64 the binary GraphML blob; everything else passes through."""
     result = dict(out)
-    for key in ("graphml", "pyg"):
+    for key in ("graphml",):
         if isinstance(result.get(key), (bytes, bytearray)):
             result[key] = base64.b64encode(result[key]).decode("ascii")
             result["content_encoding"] = "base64"

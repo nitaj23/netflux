@@ -90,7 +90,7 @@ class MFGRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source: SourceSpec
     params: OverrideParams = Field(default_factory=OverrideParams)
-    output_format: Literal["graphml", "pyg", "fba_json", "stats_json"] = "stats_json"
+    output_format: Literal["graphml", "fba_json", "stats_json"] = "stats_json"
     keep_in_session: bool = False
 
 

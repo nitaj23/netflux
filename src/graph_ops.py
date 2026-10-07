@@ -6,10 +6,8 @@ import warnings
 import cobra
 import networkx as nx
 import numpy as np
-import torch
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
-from torch_geometric.data import Data
 
 logger = logging.getLogger(__name__)
 
@@ -276,60 +274,6 @@ def compute_fpe(
     return _fpe_from_adjacency(A, km, alpha)
 
 
-def to_pyg(G: nx.DiGraph) -> Data:
-    """
-    Convert a Mass Flow Graph (NetworkX DiGraph) to a PyG Data object.
-
-    node_names is stored as a plain list[str] — never converted to a tensor.
-    PyG serialises non-tensor attributes as Python objects across torch.save/load.
-    Converting to a tensor would silently break GAT seed resolution and
-    Strategy 3 flux_vector reconstruction in compute.py.
-    """
-
-    node_names: list[str] = list(G.nodes)
-    node_index: dict[str, int] = {n: i for i, n in enumerate(node_names)}
-    n = len(node_names)
-
-    x = torch.zeros((n, NODE_FEATURE_DIM), dtype=torch.float)
-    n_base = len(BASE_FEATURE_NAMES)
-    for i, node in enumerate(node_names):
-        d  = G.nodes[node]
-        lb = float(d.get("lower_bound", 0.0))
-        x[i, :n_base] = torch.tensor([
-            float(d.get("flux", 0.0)),
-            float(G.in_degree(node)),
-            float(G.out_degree(node)),
-            1.0 if lb < 0 else 0.0,
-        ])
-
-    # FPE block (Eqs. 4–6): prefer the attribute stored by build_mfg; only
-    # recompute if absent (e.g. a graph loaded without the 'fpe' attr).
-    if n:
-        first = G.nodes[node_names[0]]
-        if "fpe" in first and len(first["fpe"]) == 2 * FPE_KM:
-            for i, node in enumerate(node_names):
-                x[i, n_base:] = torch.tensor(G.nodes[node]["fpe"], dtype=torch.float)
-        else:
-            fpe = compute_fpe(G, node_names)            # [n, 2*FPE_KM]
-            x[:, n_base:] = torch.from_numpy(fpe)
-
-    edges = list(G.edges(data=True))
-    if edges:
-        src        = torch.tensor([node_index[u] for u, _, _ in edges], dtype=torch.long)
-        dst        = torch.tensor([node_index[v] for _, v, _ in edges], dtype=torch.long)
-        edge_index = torch.stack([src, dst], dim=0)                           # [2, E]
-        edge_attr  = torch.tensor(
-            [[float(d.get("mass_flow", 0.0))] for _, _, d in edges],
-            dtype=torch.float,
-        )                                                                      # [E, 1]
-    else:
-        edge_index = torch.zeros((2, 0), dtype=torch.long)
-        edge_attr  = torch.zeros((0, 1), dtype=torch.float)
-
-    data            = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
-    data.node_names = node_names   # plain list — do NOT convert to tensor
-    data.num_nodes  = n
-    return data
 
 
 def _graphml_ready(G: nx.DiGraph) -> nx.DiGraph:
@@ -340,7 +284,7 @@ def _graphml_ready(G: nx.DiGraph) -> nx.DiGraph:
     attributes (node 'genes', node 'fpe', edge 'metabolites') are stringified.
     The copy is shallow-per-attr-dict: each attr dict is fresh, so reassigning a
     key does not mutate the original G — the in-memory graph keeps its native
-    Python lists for to_pyg() and index_gem_and_mfg(). Decode on read with
+    Python lists for index_gem_and_mfg(). Decode on read with
     json.loads().
     """
     H = G.copy()
@@ -439,9 +383,9 @@ def fpe_similarity_to_target(
     return {names[i]: float(sims[i]) for i in range(len(names))}
 
 
-def fpe_zscored(x: "np.ndarray | torch.Tensor") -> np.ndarray:
-    
-    arr = x.detach().cpu().numpy() if isinstance(x, torch.Tensor) else np.asarray(x)
+def fpe_zscored(x: "np.ndarray") -> np.ndarray:
+
+    arr = np.asarray(x)
     arr = arr.astype(np.float64)
     if arr.shape[0] == 0:
         return arr.astype(np.float32)
