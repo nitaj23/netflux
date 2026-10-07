@@ -234,6 +234,26 @@ def model_defaults(model_id: int = Path(..., ge=1), compound: str | None = Query
     return tool.model_defaults(model, conditions=conditions, compound=compound)
 
 
+@router.get("/gems/{gem_token}/compounds", response_model=list[S.CompoundOut], tags=["gems"])
+def gem_compounds(gem_token: str, q: str | None = Query(None),
+                  limit: int = Query(25, ge=1, le=500)):
+    """Compounds in an uploaded GEM, grouped by base compound with a suggested
+    target -- the Route-1 compound picker for custom models (optional `q` filter)."""
+    model = tool.resolve_model({"strategy": "custom", "gem_token": gem_token})
+    return tool.model_compounds(model, q=q, limit=limit)
+
+
+@router.get("/gems/{gem_token}/defaults", response_model=S.ModelDefaultsOut, tags=["gems"])
+def gem_defaults(gem_token: str, compound: str | None = Query(None),
+                 db: Session = Depends(get_db)):
+    """Default operating point for an uploaded GEM (parity with the repo
+    /models/{id}/defaults): objective, carbon source, exchange bounds, conditions,
+    and the suggested target for `compound`."""
+    model = tool.resolve_model({"strategy": "custom", "gem_token": gem_token})
+    conditions = db.query(Condition).order_by(Condition.condition_id).all()
+    return tool.model_defaults(model, conditions=conditions, compound=compound)
+
+
 @router.post("/gems", response_model=S.GemRegistrationResponse, status_code=201, tags=["gems"])
 async def register_gem(request: Request) -> S.GemRegistrationResponse:
     """Register a custom GEM (raw COBRA-JSON or SBML/XML body) -> ephemeral ``gem_token``."""

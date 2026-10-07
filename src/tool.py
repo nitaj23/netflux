@@ -95,7 +95,7 @@ __all__ = [
     "TargetNotProducible", "TargetNoMassFlow", "InvalidOperatingPoint",
     "AnnotationBudgetExceeded", "CacheBackend", "SessionCache",
     "register_custom_gem", "resolve_model", "apply_overrides",
-    "compute_mfg", "extract_pathway", "model_defaults",
+    "compute_mfg", "extract_pathway", "model_defaults", "model_compounds",
     "rank_design_interventions",
 ]
 
@@ -486,6 +486,35 @@ def _suggested_target(model: cobra.Model, compound: str | None) -> str | None:
         return None
     candidates.sort()
     return candidates[0][1]
+
+
+def model_compounds(model: cobra.Model, *, q: str | None = None, limit: int = 25) -> list[dict]:
+    """List a model's compounds grouped by base id (compartment variants folded).
+
+    Mirrors the repo-DB :func:`queries.search_compounds` shape so an uploaded GEM
+    gets the same compound-discovery experience. Each group carries base_id, name,
+    formula, KEGG id, the compartments seen, and ``suggested_target`` (the exchange
+    to overproduce it). Optional substring filter `q` matches id or name."""
+    ql = (q or "").lower()
+    groups: dict[str, dict] = {}
+    for met in model.metabolites:
+        if ql and ql not in met.id.lower() and ql not in (met.name or "").lower():
+            continue
+        base = base_compound_id(met.id)
+        g = groups.get(base)
+        if g is None:
+            g = groups[base] = {"base_id": base, "name": met.name or None,
+                                "formula": met.formula or None, "kegg_id": None,
+                                "compartments": [], "suggested_target": None}
+        g["name"] = g["name"] or met.name
+        g["formula"] = g["formula"] or met.formula
+        kegg = (met.annotation or {}).get("kegg.compound")
+        g["kegg_id"] = g["kegg_id"] or (kegg[0] if isinstance(kegg, list) else kegg)
+        if met.compartment and met.compartment not in g["compartments"]:
+            g["compartments"].append(met.compartment)
+    for base, g in groups.items():
+        g["suggested_target"] = _suggested_target(model, base)
+    return list(groups.values())[:limit]
 
 
 def model_defaults(model: cobra.Model, *, conditions: Sequence[Condition] | None = None,

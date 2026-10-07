@@ -180,6 +180,7 @@ class CompoundOut(BaseModel):
     formula: Optional[str] = None
     kegg_id: Optional[str] = None
     compartments: list[str] = Field(default_factory=list)
+    suggested_target: Optional[str] = None  # set for custom-model listings
 
 
 class CompoundOrganismOut(BaseModel):
