@@ -100,6 +100,7 @@ class PathwayRequest(BaseModel):
     target: str  # product reaction id, or a metabolite id to drain
     source_ids: Optional[list[str]] = None        # GUDIE dual-anchor substrates
     config: Optional[GudieConfigSpec] = None
+    repair: bool = False                          # opt-in connectivity repair (extractor)
     fva_operating_points: Optional[list[float]] = None  # fractions of v*; gates FVA annotation
     fva_loopless: bool = False
     include_graphml: bool = False
@@ -169,3 +170,47 @@ class GemRegistrationResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok", "degraded"]
     database: bool
+
+
+# ── Compound search ───────────────────────────────────────────────────────────
+class CompoundOut(BaseModel):
+    """One base compound (compartment variants folded together)."""
+    base_id: str
+    name: Optional[str] = None
+    formula: Optional[str] = None
+    kegg_id: Optional[str] = None
+    compartments: list[str] = Field(default_factory=list)
+
+
+class CompoundOrganismOut(BaseModel):
+    """A model carrying a compound, with its production readiness signals."""
+    model: ModelOut
+    has_exchange: bool
+    carries_flow: bool
+    suggested_target: Optional[str] = None
+
+
+# ── Model defaults ──────────────────────────────────────────────────────────
+class ModelDefaultsOut(BaseModel):
+    objective_rxn: Optional[str] = None
+    objective_rxns: list[str] = Field(default_factory=list)
+    direction: str
+    carbon_source: Optional[str] = None
+    carbon_source_options: list[str] = Field(default_factory=list)
+    exchange_bounds: dict[str, list[float]] = Field(default_factory=dict)
+    condition_id: Optional[str] = None
+    condition_options: list[str] = Field(default_factory=list)
+    target: Optional[str] = None
+
+
+# ── Async jobs ────────────────────────────────────────────────────────────────
+class JobSubmitResponse(BaseModel):
+    job_id: str
+    status: Literal["queued", "running", "completed", "failed"]
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: Literal["queued", "running", "completed", "failed"]
+    result: Optional[dict[str, Any]] = None
+    error: Optional[dict[str, Any]] = None

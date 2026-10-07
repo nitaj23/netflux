@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Iterator
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query, Request
+from fastapi import (APIRouter, Depends, FastAPI, File, HTTPException, Path,
+                     Query, Request, UploadFile)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -26,6 +28,7 @@ from src import queries, tool
 from src.db import SessionLocal
 from src.schema import Condition, Model
 from src.api import schemas as S
+from src.api.jobs import JobManager, MAX_CONCURRENT_DESIGN_JOBS
 from src.extraction.pathway import (
     AnnotationBudgetExceeded, InfeasibleModel, InvalidOperatingPoint,
     TargetBlocked, TargetNoMassFlow, TargetNotFound, TargetNotProducible,
@@ -33,6 +36,28 @@ from src.extraction.pathway import (
 
 logger = logging.getLogger(__name__)
 API_PREFIX = "/api/v1"
+
+# Default allowed origins for local frontend dev. Production overrides via the
+# NETFLUX_CORS_ORIGINS env var (comma-separated). A permissive "*" is never the
+# built-in default; it is only used if an operator explicitly sets the var to "*".
+_DEFAULT_CORS_ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000",
+                         "http://localhost:5173", "http://127.0.0.1:5173")
+
+
+def allowed_origins() -> list[str]:
+    """Explicit, configurable CORS allow-list (env NETFLUX_CORS_ORIGINS or dev defaults)."""
+    raw = os.getenv("NETFLUX_CORS_ORIGINS")
+    if raw is None:
+        return list(_DEFAULT_CORS_ORIGINS)
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
+# One process-wide bounded runner for async design jobs (RAM-only, ephemeral).
+job_manager = JobManager(max_workers=MAX_CONCURRENT_DESIGN_JOBS,
+                         error_serializer=lambda exc: {
+                             "error": type(exc).__name__,
+                             "detail": str(exc) or type(exc).__name__,
+                             "hint": getattr(exc, "hint", None)})
 
 
 # ── Dependency: request-scoped DB session ────────────────────────────────────
@@ -184,10 +209,47 @@ def gems_with_metabolite(bigg_id: str, db: Session = Depends(get_db)):
     return queries.gems_containing_metabolite(db, bigg_id)
 
 
+@router.get("/compounds", response_model=list[S.CompoundOut], tags=["catalog"])
+def search_compounds(q: str = Query(..., min_length=1), limit: int = Query(25, ge=1, le=500),
+                     db: Session = Depends(get_db)):
+    """Search compounds by id/name, grouped by base compound (compartments folded)."""
+    return queries.search_compounds(db, q, limit)
+
+
+@router.get("/compounds/{base_id}/organisms", response_model=list[S.CompoundOrganismOut],
+            tags=["catalog"])
+def compound_organisms(base_id: str, db: Session = Depends(get_db)):
+    """Models carrying `base_id` with has_exchange / carries_flow / suggested_target;
+    flow-carrying models first."""
+    return queries.compound_organisms(db, base_id)
+
+
+@router.get("/models/{model_id}/defaults", response_model=S.ModelDefaultsOut, tags=["catalog"])
+def model_defaults(model_id: int = Path(..., ge=1), compound: str | None = Query(None),
+                   db: Session = Depends(get_db)):
+    """Default operating point (objective, carbon source, exchange bounds, conditions,
+    suggested target) the frontend needs to pre-fill a run form."""
+    model = tool.resolve_model({"strategy": "repo", "model_id": model_id}, db=db)
+    conditions = db.query(Condition).order_by(Condition.condition_id).all()
+    return tool.model_defaults(model, conditions=conditions, compound=compound)
+
+
 @router.post("/gems", response_model=S.GemRegistrationResponse, status_code=201, tags=["gems"])
 async def register_gem(request: Request) -> S.GemRegistrationResponse:
-    """Register a custom GEM (raw cobra-JSON body) -> ephemeral ``gem_token``."""
+    """Register a custom GEM (raw COBRA-JSON or SBML/XML body) -> ephemeral ``gem_token``."""
     token, summary, warnings = tool.register_custom_gem(await request.body())
+    return S.GemRegistrationResponse(gem_token=token, summary=summary, warnings=warnings)
+
+
+@router.post("/gems/upload", response_model=S.GemRegistrationResponse, status_code=201,
+             tags=["gems"])
+async def upload_gem(file: UploadFile = File(...)) -> S.GemRegistrationResponse:
+    """Browser-friendly multipart upload of a custom GEM (COBRA-JSON or SBML/XML).
+
+    Parallels the raw-body ``POST /gems`` (which is preserved); same validation,
+    same 50 MB cap, same ephemeral token/summary/warning/error structure. The
+    upload is never written to disk or a database."""
+    token, summary, warnings = tool.register_custom_gem(await file.read())
     return S.GemRegistrationResponse(gem_token=token, summary=summary, warnings=warnings)
 
 
@@ -204,21 +266,49 @@ def extract_pathway(req: S.PathwayRequest, db: Session = Depends(get_db)) -> dic
     """Extract the bioproduction pathway H for ``target`` (+ optional FVA annotation)."""
     result = tool.extract_pathway(
         req.source.to_dict(), req.target, source_ids=req.source_ids,
-        config=req.config.to_config() if req.config else None,
+        config=req.config.to_config() if req.config else None, repair=req.repair,
         fva_operating_points=req.fva_operating_points, fva_loopless=req.fva_loopless, db=db)
     return _pathway_payload(result, include_graphml=req.include_graphml)
 
 
-@router.post("/designs", tags=["design"])
-def rank_designs(req: S.DesignRequest, db: Session = Depends(get_db)) -> dict:
-    """Rank buildable KO designs (unified OptForce + OptKnock engine); regulatory
-    leads come back separately as ``hypotheses``."""
-    return tool.rank_design_interventions(
-        req.source.to_dict(), req.target, req.biomass, substrate=req.substrate,
-        methods=tuple(req.methods), require_buildable=req.require_buildable,
-        parallel=req.parallel, params=req.params.to_params() if req.params else None,
-        discovery_source=req.discovery_source.to_dict() if req.discovery_source else None,
-        db=db)
+def _run_design_job(req: S.DesignRequest) -> dict:
+    """Execute a design ranking with its OWN DB session (runs off-request-thread)."""
+    db = SessionLocal()
+    try:
+        return tool.rank_design_interventions(
+            req.source.to_dict(), req.target, req.biomass, substrate=req.substrate,
+            methods=tuple(req.methods), require_buildable=req.require_buildable,
+            parallel=req.parallel, params=req.params.to_params() if req.params else None,
+            discovery_source=req.discovery_source.to_dict() if req.discovery_source else None,
+            db=db)
+    finally:
+        db.close()
+
+
+@router.post("/designs", response_model=S.JobSubmitResponse, status_code=202, tags=["design"])
+def rank_designs(req: S.DesignRequest) -> S.JobSubmitResponse:
+    """Submit a strain-design ranking as an async job; returns a ``job_id``.
+
+    The unified OptForce + OptKnock engine runs on a bounded in-process executor
+    (at most 4 concurrent jobs); poll ``GET /jobs/{job_id}`` for the result. A
+    completed job's ``result`` is exactly the payload the engine produces."""
+    job_id = job_manager.submit(_run_design_job, req)
+    job = job_manager.get(job_id)
+    return S.JobSubmitResponse(job_id=job_id, status=job.status if job else "queued")
+
+
+@router.get("/jobs/{job_id}", response_model=S.JobStatusResponse, tags=["design"])
+def get_job(job_id: str) -> S.JobStatusResponse:
+    """Poll an async job: queued | running | completed | failed.
+
+    A completed job carries the full design ``result``; a failed job retains the
+    typed ``error`` / ``detail`` / ``hint`` from the engine."""
+    job = job_manager.get(job_id)
+    if job is None:
+        raise HTTPException(404, f"no job with id={job_id!r}")
+    return S.JobStatusResponse(job_id=job.id, status=job.status,
+                               result=job.result if job.status == "completed" else None,
+                               error=job.error)
 
 
 # ── App factory ───────────────────────────────────────────────────────────────
@@ -237,8 +327,8 @@ def create_app() -> FastAPI:
                   description="Ephemeral FBA/MFG compute, bioproduction-pathway "
                               "extraction and strain-design ranking over repository "
                               "and user-uploaded GEMs. All compute is RAM-only.")
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"],
-                       allow_headers=["*"])
+    app.add_middleware(CORSMiddleware, allow_origins=allowed_origins(),
+                       allow_methods=["*"], allow_headers=["*"])
     # Register the cheap tool/pathway error bases so they convert cleanly; the
     # Exception fallback catches design-engine errors and unexpected bugs.
     for base in (tool.ToolError, TargetNotFound, TargetBlocked, TargetNotProducible,

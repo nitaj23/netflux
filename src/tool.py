@@ -1,6 +1,6 @@
 # src/tool.py
 """
-MFGHub ephemeral TOOL-LAYER SERVICE (functions only — no FastAPI routes yet).
+Ephemeral TOOL-LAYER SERVICE
 
 On-demand FBA + MFG compute and bioproduction-pathway extraction over repo GEMs
 *and* user-uploaded custom GEMs, plus an FVA design-annotation layer — with one
@@ -36,13 +36,14 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import threading
 import time
 import uuid
 from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, ContextManager, Protocol, Sequence, runtime_checkable
 
 import cobra
 import torch
@@ -92,13 +93,23 @@ __all__ = [
     "InfeasibleMaintenance", "TokenNotFound", "TokenExpired", "CacheFull",
     "AnnotationUnavailable", "TargetNotFound", "TargetBlocked",
     "TargetNotProducible", "TargetNoMassFlow", "InvalidOperatingPoint",
-    "AnnotationBudgetExceeded", "SessionCache",
+    "AnnotationBudgetExceeded", "CacheBackend", "SessionCache",
     "register_custom_gem", "resolve_model", "apply_overrides",
-    "compute_mfg", "extract_pathway",
+    "compute_mfg", "extract_pathway", "model_defaults",
     "rank_design_interventions",
-    "rank_optforce_interventions",
-    "rank_optknock_interventions",
 ]
+
+
+# ── Cache backend interface ──────────────────────────────────────────────────
+# The tool layer talks to its token store only through this small surface, so a
+# shared/out-of-process backend (e.g. Redis) can be dropped in later without
+# touching any call site. The default implementation below stays RAM-only.
+@runtime_checkable
+class CacheBackend(Protocol):
+    """Minimal token-store contract: TTL'd put/get + a bounded job slot."""
+    def put(self, payload: Any, kind: str, *, size_bytes: int = 0) -> str: ...
+    def get(self, token: str, *, kind: str | None = None) -> Any: ...
+    def job_slot(self) -> ContextManager[None]: ...
 
 
 # ── RAM-only session cache ───────────────────────────────────────────────────
@@ -184,6 +195,16 @@ _CACHE = SessionCache()
 # guard in optforce.pipeline._detect_substrate).
 _INORGANIC_CARBON_FORMULAS = {"CO2", "CHO3", "CO3", "HCO3"}
 
+# Compartment suffix on a BiGG-style id (``succ_c`` / ``glc__D_e`` / ``atp_im``):
+# a trailing ``_<compartment>`` where the compartment is 1-2 short tokens. Used to
+# group compound variants across compartments by their base id.
+_COMPARTMENT_SUFFIX = re.compile(r"_([a-z][a-z0-9]?)$")
+
+
+def base_compound_id(met_id: str) -> str:
+    """Strip a trailing compartment suffix (``_c``/``_e``/``_p``/...) from a met id."""
+    return _COMPARTMENT_SUFFIX.sub("", met_id)
+
 
 def _carbon_sources(model: cobra.Model) -> list[str]:
     """Boundary reactions supplying an *organic*-carbon uptake route (lb < 0).
@@ -206,8 +227,51 @@ def _carbon_sources(model: cobra.Model) -> list[str]:
     return sources
 
 
+def _looks_like_sbml(text: str) -> bool:
+    """Cheap sniff: SBML/XML starts with an XML prolog or an ``<sbml``/``<?xml`` tag."""
+    head = text.lstrip()[:512].lower()
+    return head.startswith("<?xml") or head.startswith("<sbml") or "<sbml" in head
+
+
+def _parse_gem_bytes(raw: bytes) -> tuple[cobra.Model, str, str]:
+    """Parse an uploaded GEM from either COBRA-JSON or SBML/XML bytes.
+
+    Returns (model, fmt, text) where ``fmt`` is ``"json"`` or ``"sbml"`` and
+    ``text`` is the decoded source (cached so resolve_model can re-parse a fresh,
+    never-mutated copy). Nothing touches disk: SBML is read from an in-memory
+    buffer. Raises GemUnparseable on malformed input.
+    """
+    try:
+        text = raw.decode("utf-8")
+    except Exception as exc:
+        raise GemUnparseable(f"upload is not UTF-8 text: {exc}",
+                             hint="upload a COBRA-JSON or SBML/XML model") from exc
+    if _looks_like_sbml(text):
+        try:
+            model = cobra.io.read_sbml_model(io.StringIO(text))
+        except Exception as exc:
+            raise GemUnparseable(f"not valid SBML: {exc}",
+                                 hint="export with cobra.io.write_sbml_model") from exc
+        return model, "sbml", text
+    try:
+        model = cobra.io.from_json(text)
+    except Exception as exc:
+        raise GemUnparseable(f"not valid cobra-JSON or SBML: {exc}",
+                             hint="export with cobra.io.save_json_model / write_sbml_model") from exc
+    return model, "json", text
+
+
+def _model_from_cached(cached: Any) -> cobra.Model:
+    """Re-parse a cached GEM payload into a fresh cobra.Model (format-aware)."""
+    if isinstance(cached, dict):          # new {"fmt", "text"} envelope
+        if cached.get("fmt") == "sbml":
+            return cobra.io.read_sbml_model(io.StringIO(cached["text"]))
+        return cobra.io.from_json(cached["text"])
+    return cobra.io.from_json(cached)     # legacy: bare JSON string
+
+
 def register_custom_gem(raw: bytes) -> tuple[str, dict, list[str]]:
-    """Validate an uploaded cobra-JSON GEM, cache its JSON in RAM, return a token.
+    """Validate an uploaded COBRA-JSON or SBML/XML GEM, cache it in RAM, return a token.
 
     Never persisted. Returns (gem_token, summary, warnings). Metabolites, reactions,
     and genes (GPR) are hard requirements -- each a typed rejection when absent,
@@ -216,16 +280,11 @@ def register_custom_gem(raw: bytes) -> tuple[str, dict, list[str]]:
     the medium/objective may be set later via apply_overrides.
     """
     if not raw:
-        raise GemEmpty("empty upload", hint="POST the GEM's JSON bytes")
+        raise GemEmpty("empty upload", hint="POST the GEM's JSON or SBML bytes")
     if len(raw) > MAX_UPLOAD_BYTES:
         raise GemTooLarge(f"upload is {len(raw)} bytes (> {MAX_UPLOAD_BYTES})",
                           hint="reduce the model or raise MAX_UPLOAD_BYTES")
-    try:
-        text = raw.decode("utf-8")
-        model = cobra.io.from_json(text)
-    except Exception as exc:
-        raise GemUnparseable(f"not valid cobra-JSON: {exc}",
-                             hint="export with cobra.io.save_json_model / to_json") from exc
+    model, fmt, text = _parse_gem_bytes(raw)
 
     # 1-2. Metabolites and reactions: a model without either is not a GEM.
     if not model.metabolites or not model.reactions:
@@ -263,9 +322,10 @@ def register_custom_gem(raw: bytes) -> tuple[str, dict, list[str]]:
         "objective_id": objective_id,
         "carbon_sources": carbon_sources,
         "exchanges": [r.id for r in model.exchanges],
+        "format": fmt,
         "content_hash": hashlib.sha256(raw).hexdigest(),
     }
-    token = _CACHE.put(text, "gem", size_bytes=len(raw))
+    token = _CACHE.put({"fmt": fmt, "text": text}, "gem", size_bytes=len(raw))
     return token, summary, warnings
 
 
@@ -291,13 +351,14 @@ def resolve_model(source: dict, *, db=None) -> cobra.Model:
                 session.close()
 
     if strategy == "custom":
-        text = _CACHE.get(source["gem_token"], kind="gem")
-        return cobra.io.from_json(text)
+        cached = _CACHE.get(source["gem_token"], kind="gem")
+        return _model_from_cached(cached)
 
     if strategy == "session":
         recipe = _CACHE.get(source["session_token"], kind="recipe")
-        model = resolve_model(recipe["source_ref"], db=db)
-        return apply_overrides(model, recipe["overrides"])
+        # Replay faithfully: the original source's own overrides (folded into
+        # source_ref) then the recipe's compute params, in the canonical order.
+        return resolve_overridden(recipe["source_ref"], recipe["overrides"], db=db)
 
     raise ToolError(f"unknown resolution strategy {strategy!r}",
                     hint="strategy must be 'repo', 'custom', or 'session'")
@@ -383,6 +444,81 @@ def _infeasible(model: cobra.Model, detail: str) -> ToolError:
     return Infeasible(detail, hint="no feasible flux state under these bounds; check the medium/knockouts")
 
 
+def resolve_overridden(source: dict, extra: dict | None = None, *, db=None) -> cobra.Model:
+    """Resolve `source` and apply its override layers, in the one canonical order.
+
+    Applies ``source["overrides"]`` for EVERY strategy (repo / custom / session) --
+    not just session -- so ``source.overrides`` behaves consistently across /mfg,
+    /pathways and /designs. For a session source the stored recipe is first replayed
+    by resolve_model, then ``source.overrides`` is layered on top, then any `extra`
+    (e.g. /mfg's explicit params). Within each apply_overrides call the axes keep
+    their fixed order: condition -> custom exchange bounds -> reaction bounds/KO ->
+    carbon source -> objective/direction.
+    """
+    model = resolve_model(source, db=db)
+    if (ov := source.get("overrides")):
+        apply_overrides(model, ov, db=db)
+    if extra:
+        apply_overrides(model, extra, db=db)
+    return model
+
+
+def _objective_reaction_ids(model: cobra.Model) -> list[str]:
+    """Reaction ids carrying a non-zero objective coefficient (model order)."""
+    return [r.id for r in model.reactions if r.objective_coefficient != 0]
+
+
+def _suggested_target(model: cobra.Model, compound: str | None) -> str | None:
+    """Best exchange reaction to overproduce `compound` (base id), extracellular
+    preferred; None when the compound has no exchange in this model."""
+    if not compound:
+        return None
+    base = base_compound_id(compound)
+    candidates: list[tuple[int, str]] = []
+    for rxn in model.exchanges:
+        for met in rxn.metabolites:
+            if base_compound_id(met.id) == base:
+                # Prefer an extracellular ('_e') drain, then any exchange.
+                candidates.append((0 if met.compartment == "e"
+                                   or met.id.endswith("_e") else 1, rxn.id))
+                break
+    if not candidates:
+        return None
+    candidates.sort()
+    return candidates[0][1]
+
+
+def model_defaults(model: cobra.Model, *, conditions: Sequence[Condition] | None = None,
+                   compound: str | None = None) -> dict:
+    """Default operating point the frontend needs to pre-fill a run form.
+
+    Reuses the same primitives as custom-GEM registration (``_carbon_sources``,
+    the objective/exchange readout) rather than a second defaults system. Returns
+    the objective reaction + direction, the current carbon source and the full set
+    of organic-carbon uptake options, every exchange's current bounds, the DB
+    condition catalogue (id + options), and -- when `compound` is given -- the
+    suggested target exchange to overproduce it.
+    """
+    objective = _objective_reaction_ids(model)
+    carbon_options = _carbon_sources(model)
+    try:
+        direction = model.objective_direction
+    except Exception:
+        direction = "max"
+    cond_rows = list(conditions or [])
+    return {
+        "objective_rxn": objective[0] if objective else None,
+        "objective_rxns": objective,
+        "direction": direction,
+        "carbon_source": carbon_options[0] if carbon_options else None,
+        "carbon_source_options": carbon_options,
+        "exchange_bounds": {r.id: [r.lower_bound, r.upper_bound] for r in model.exchanges},
+        "condition_id": cond_rows[0].condition_id if cond_rows else None,
+        "condition_options": [c.condition_id for c in cond_rows],
+        "target": _suggested_target(model, compound),
+    }
+
+
 def compute_mfg(source: dict, params: dict, *, output_format: str = "stats_json",
                 keep_in_session: bool = False) -> dict:
     """Resolve -> apply_overrides -> FBA/pFBA -> build_mfg -> in-memory artifact.
@@ -390,9 +526,10 @@ def compute_mfg(source: dict, params: dict, *, output_format: str = "stats_json"
     output_format in {"graphml", "pyg", "fba_json", "stats_json"}. When
     keep_in_session=True the recipe (source + overrides) is memoized under a
     session_token returned in the result for later replay. Nothing is persisted.
+    `source.overrides` and `params` are both applied (source.overrides first).
     """
     params = params or {}
-    model = apply_overrides(resolve_model(source), params)
+    model = resolve_overridden(source, params)
     sol = _run_fba(model, bool(params.get("use_pfba")))
     G = build_mfg(model, sol)
 
@@ -423,25 +560,27 @@ def compute_mfg(source: dict, params: dict, *, output_format: str = "stats_json"
 
 # ── Pathway extraction (+ FVA design-annotation) ─────────────────────────────
 def extract_pathway(source: dict, target: str, *, source_ids: Sequence[str] | None = None,
-                    config: GudieConfig | None = None,
+                    config: GudieConfig | None = None, repair: bool = False,
                     fva_operating_points: Sequence[float] | None = None,
                     fva_loopless: bool = False, db=None) -> PathwayResult:
     """Extract the bioproduction pathway for `target` (+ optional FVA annotation).
 
     Full mode (repo/custom/session): resolve+override a cobra model, then run
     extract_bioproduction_pathway inside a bounded job slot. Annotation is gated
-    behind fva_operating_points (None => today's behaviour, unchanged).
+    behind fva_operating_points (None => today's behaviour, unchanged). `repair`
+    (default False, byte-identical output) is forwarded to the existing extractor's
+    opt-in connectivity repair -- no new repair algorithm is introduced here.
+    `source.overrides` is applied for every strategy (see resolve_overridden).
 
     Graph-only mode is not available here: without a cobra model neither FASTCC
     nor FVA can run, so a graph-only source that requests annotation raises
     AnnotationUnavailable rather than silently returning an empty set (E-15).
     """
-    params = source.get("overrides") if source.get("strategy") == "session" else None
     with _CACHE.job_slot():
-        model = apply_overrides(resolve_model(source, db=db), params or {}, db=db)
+        model = resolve_overridden(source, db=db)
         try:
             return extract_bioproduction_pathway(
-                model, target, source_ids=source_ids, config=config,
+                model, target, source_ids=source_ids, config=config, repair=repair,
                 fva_operating_points=fva_operating_points, fva_loopless=fva_loopless)
         except (TargetNotFound, TargetBlocked, TargetNotProducible, TargetNoMassFlow,
                 InfeasibleModel, InvalidOperatingPoint, AnnotationBudgetExceeded):
@@ -558,14 +697,11 @@ def rank_design_interventions(source: dict, target: str, biomass: str, *,
         raise ToolError(f"unknown design param(s): {sorted(unknown)}",
                         hint=f"allowed params: {sorted(_DESIGN_PARAM_KEYS)}")
 
-    ov = source.get("overrides") if source.get("strategy") == "session" else None
     with _CACHE.job_slot():
-        model = apply_overrides(resolve_model(source, db=db), ov or {}, db=db)
+        model = resolve_overridden(source, db=db)
         disc = None
         if discovery_source is not None:
-            dov = (discovery_source.get("overrides")
-                   if discovery_source.get("strategy") == "session" else None)
-            disc = apply_overrides(resolve_model(discovery_source, db=db), dov or {}, db=db)
+            disc = resolve_overridden(discovery_source, db=db)
         result = _de.rank_intervention_candidates(
             model, target, biomass, substrate, discovery_model=disc,
             methods=methods, require_buildable=require_buildable,
@@ -602,174 +738,3 @@ def rank_design_interventions(source: dict, target: str, biomass: str, *,
         "notes": list(result.notes),
         "params": params,
     }
-
-
-# ── OptForce intervention ranking: tool-layer entry (display/export table) ─────
-# Engine kwargs forwarded to optforce.rank_intervention_candidates. target,
-# biomass, and substrate are first-class arguments; everything else is an opt-in
-# tuning knob sent through `params` (send only the fields the user changed).
-_OPTFORCE_PARAM_KEYS = frozenset({
-    "min_growth_frac", "min_growth_abs", "gamma", "eps_prod", "class_tol",
-    "backend", "top_k", "enable_k2", "solver_timeout", "gpr_cap",
-})
-
-
-def rank_optforce_interventions(source: dict, target: str, biomass: str, *,
-                                substrate: str | None = None,
-                                params: dict | None = None,
-                                discovery_source: dict | None = None,
-                                db=None) -> dict:
-    """Run the OptForce intervention-ranking pipeline over `source` and return a
-    frontend-ready table (+ CSV) of the verified, Pareto-ranked designs.
-
-    `source`      the usual model-resolution dict (repo / custom / session).
-    `target`      product reaction id (required; OptForce forces its overproduction).
-    `biomass`     growth/biomass reaction id (required; the coupling objective).
-    `substrate`   optional substrate-uptake reaction id; when omitted the engine
-                  auto-detects the largest organic-carbon uptake route.
-    `params`      a PARTIAL tuning dict -- send only the fields the user changed
-                  (`min_growth_frac`, `gamma`, `eps_prod`, `enable_k2`, `top_k`,
-                  `backend`, `solver_timeout`, `gpr_cap`, ...); every absent field
-                  takes its documented pipeline default. Unknown keys are rejected.
-    `discovery_source` optional reduced/discovery model (same resolution dict); the
-                  engine discovers candidates on it, then verifies on the full model,
-                  falling back to the full model if the reduced one fails validation.
-
-    Returns ``{table, csv, accepted, rejected, baseline, pareto_objectives,
-    extraction_fallback, extraction_failure_reason, timings, notes, params}``.
-    ``table`` is the self-describing grid (``columns`` + ``rows``) the frontend
-    renders and ``csv`` is the ready-to-download export string; ``accepted`` /
-    ``rejected`` are the full per-candidate JSON rows. The model is resolved +
-    overridden here so a condition/medium/knockout override is honoured exactly as
-    in ``extract_pathway`` / ``design_strains_table``; the engine is RAM-only, so
-    nothing is persisted, and the run is bounded by the same job slot. Typed
-    base-model errors (``BiomassNotGrowing``, ``TargetNotProducible``,
-    ``BaseModelInfeasible``, ``InvalidGamma``, ...) propagate unchanged, each
-    carrying an actionable ``.hint``.
-    """
-    import src.optforce as _of
-
-    params = dict(params or {})
-    unknown = set(params) - _OPTFORCE_PARAM_KEYS
-    if unknown:
-        raise ToolError(
-            f"unknown optforce param(s): {sorted(unknown)}",
-            hint=f"allowed params: {sorted(_OPTFORCE_PARAM_KEYS)}")
-
-    ov = source.get("overrides") if source.get("strategy") == "session" else None
-    with _CACHE.job_slot():
-        model = apply_overrides(resolve_model(source, db=db), ov or {}, db=db)
-        disc = None
-        if discovery_source is not None:
-            dov = (discovery_source.get("overrides")
-                   if discovery_source.get("strategy") == "session" else None)
-            disc = apply_overrides(resolve_model(discovery_source, db=db), dov or {}, db=db)
-        result = _of.rank_intervention_candidates(
-            model, target, biomass, substrate, discovery_model=disc, **params)
-
-    return {
-        "table": _of.ranking_table(result),
-        "csv": _of.ranking_csv(result),
-        "accepted": [_of.candidate_to_dict(c) for c in result.accepted],
-        "rejected": [_of.candidate_to_dict(c) for c in result.rejected],
-        "baseline": {
-            "mu_wt": result.mu_wt,
-            "floor_wt": result.floor_wt,
-            "ceiling_wt": result.ceiling_wt,
-            "substrate_rxn": result.substrate_rxn,
-        },
-        "pareto_objectives": list(result.pareto_objectives),
-        "extraction_fallback": result.extraction_fallback,
-        "extraction_failure_reason": result.extraction_failure_reason,
-        "timings": result.timings,
-        "notes": list(result.notes),
-        "params": params,
-    }
-
-
-# ── OptKnock intervention ranking: tool-layer entry (display/export table) ─────
-# Engine kwargs forwarded to optknock.rank_intervention_candidates. `max_knockouts`
-# (1..3) is the knockout budget: k=1 screens single KOs on GLPK, k>=2 runs the
-# greedy beam on HiGHS. Everything else is an opt-in tuning knob sent via `params`.
-_OPTKNOCK_PARAM_KEYS = frozenset({
-    "max_knockouts", "min_growth_frac", "min_growth_abs", "gamma", "eps_prod",
-    "class_tol", "backend", "top_k", "solver_timeout", "gpr_cap",
-})
-
-
-def rank_optknock_interventions(source: dict, target: str, biomass: str, *,
-                                substrate: str | None = None,
-                                params: dict | None = None,
-                                discovery_source: dict | None = None,
-                                db=None) -> dict:
-    """Run the OptKnock knockout-design pipeline over `source` and return a
-    frontend-ready table (+ CSV) of the verified, Pareto-ranked designs.
-
-    Same contract as :func:`rank_optforce_interventions` (model resolution +
-    overrides, RAM-only, one job slot, typed base-model errors propagate with an
-    actionable ``.hint``). `target` is the product reaction id whose overproduction
-    is coupled to growth; `biomass` the growth reaction. `params` is a PARTIAL
-    tuning dict -- notably ``max_knockouts`` (1/2/3); every absent field takes its
-    pipeline default and unknown keys are rejected.
-    """
-    import src.optknock as _ok
-
-    params = dict(params or {})
-    unknown = set(params) - _OPTKNOCK_PARAM_KEYS
-    if unknown:
-        raise ToolError(
-            f"unknown optknock param(s): {sorted(unknown)}",
-            hint=f"allowed params: {sorted(_OPTKNOCK_PARAM_KEYS)}")
-
-    ov = source.get("overrides") if source.get("strategy") == "session" else None
-    with _CACHE.job_slot():
-        model = apply_overrides(resolve_model(source, db=db), ov or {}, db=db)
-        disc = None
-        if discovery_source is not None:
-            dov = (discovery_source.get("overrides")
-                   if discovery_source.get("strategy") == "session" else None)
-            disc = apply_overrides(resolve_model(discovery_source, db=db), dov or {}, db=db)
-        result = _ok.rank_intervention_candidates(
-            model, target, biomass, substrate, discovery_model=disc, **params)
-
-    return {
-        "table": _ok.ranking_table(result),
-        "csv": _ok.ranking_csv(result),
-        "accepted": [_ok.candidate_to_dict(c) for c in result.accepted],
-        "rejected": [_ok.candidate_to_dict(c) for c in result.rejected],
-        "baseline": {
-            "mu_wt": result.mu_wt,
-            "floor_wt": result.floor_wt,
-            "ceiling_wt": result.ceiling_wt,
-            "substrate_rxn": result.substrate_rxn,
-        },
-        "pareto_objectives": list(result.pareto_objectives),
-        "extraction_fallback": result.extraction_fallback,
-        "extraction_failure_reason": result.extraction_failure_reason,
-        "timings": result.timings,
-        "notes": list(result.notes),
-        "params": params,
-    }
-
-
-# ── OptForce engine: lazy re-export of its typed base-model errors ─────────────
-# optforce does not import from this module (no cycle), but its errors are still
-# resolved on demand so importing tool.py stays light and the engine's numpy/cobra
-# import cost is paid only when OptForce is actually used. This gives callers a
-# single import surface: `from src.tool import BiomassNotGrowing`, etc.
-# Only the base-model *contract* errors are re-exported -- candidate-level failures
-# are strings on a result (see optforce.errors), not exceptions.
-_OPTFORCE_ERROR_EXPORTS = {
-    "OptForceError", "BaseModelInfeasible", "BiomassNotGrowing",
-    "TargetNotProducible", "InvalidGamma", "DiscoveryModelInvalid",
-    "MissingFullModelReaction", "AmbiguousTargetIdentity", "SolverFailure",
-    "SolverTimeout",
-}
-__all__ += sorted(_OPTFORCE_ERROR_EXPORTS)
-
-
-def __getattr__(name: str):
-    if name in _OPTFORCE_ERROR_EXPORTS:
-        from optforce import errors as _of_errors
-        return getattr(_of_errors, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

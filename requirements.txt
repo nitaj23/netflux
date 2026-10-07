@@ -17,3 +17,4 @@ highspy==1.15.1
 pytest
 httpx
 python-dotenv
+python-multipart

@@ -204,34 +204,6 @@ def personalized_pagerank(
                        max_iter)
     return p, converged
 
-
-def _katz_fallback(A_hat: sp.csr_matrix, seed_idx: int, beta: float = 1.0) -> np.ndarray:
-    """
-    Target-personalised Katz fallback (blueprint degradation table; VUDIE cross-check):
-        x = alpha * A_hat x + beta * e_seed,   alpha < 1/lambda_max(A_hat).
-    Same left-multiply operator direction as PPR (upstream spread).
-    """
-    n = A_hat.shape[0]
-    e = np.zeros(n); e[seed_idx] = beta
-    if A_hat.nnz == 0:
-        return e / (e.sum() or 1.0)
-    try:
-        lam = float(np.abs(spla.eigs(A_hat, k=1, which="LM", return_eigenvectors=False)[0]))
-    except (spla.ArpackNoConvergence, spla.ArpackError, ValueError):
-        lam = float(np.abs(A_hat).sum(axis=1).max())       # crude row-sum bound
-    alpha = 0.9 / lam if lam > 1e-12 else 0.0
-    x = e.copy()
-    for _ in range(200):
-        x_new = alpha * (A_hat @ x) + e
-        if np.abs(x_new - x).sum() < 1e-9:
-            x = x_new
-            break
-        x = x_new
-    s = x.sum()
-    return x / s if s > 0 else x
-
-
- 
 # Step 2.2 — FCA coupling of each reaction to the target (LUDIE prerequisite)
  
 def flux_coupling_to_target(

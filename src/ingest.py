@@ -1,6 +1,6 @@
 # src/ingest.py
 """
-MFGHub ingest pipeline.
+Ingest pipeline.
 
 Public API
 ----------
@@ -117,6 +117,15 @@ def index_gem_and_mfg(
     active_node_count = sum(
         1 for n in G.nodes if abs(G.nodes[n].get("flux", 0.0)) > 1e-9
     )
+    # Atomically demote any prior latest entry for this (model, condition): the
+    # new row below becomes the sole is_latest=True, in the same transaction so a
+    # reader never sees two latests or none. A NULL condition is matched as NULL.
+    cond_filter = (MFGEntry.condition_id_fk == condition_id_fk if condition_id_fk is not None
+                   else MFGEntry.condition_id_fk.is_(None))
+    (db.query(MFGEntry)
+       .filter(MFGEntry.model_id == model_db_id, cond_filter,
+               MFGEntry.is_latest == True)
+       .update({MFGEntry.is_latest: False}, synchronize_session=False))
     mfg_entry = MFGEntry(
         entry_id=entry_id,
         model_id=model_db_id,
