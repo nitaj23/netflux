@@ -4,8 +4,10 @@
 FROM python:3.12-slim
 
 # build-essential covers the few scientific wheels that may compile from source.
+# libexpat1: python-libsbml (imported by cobra) links the system libexpat, which
+# Debian trixie-based python:*-slim images no longer ship.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential && rm -rf /var/lib/apt/lists/*
+    build-essential libexpat1 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
