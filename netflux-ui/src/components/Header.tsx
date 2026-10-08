@@ -7,7 +7,7 @@ export function Header() {
     <header className="topbar">
       <h1>NetFlux</h1>
       <nav>
-        <button className="nav-link accent" onClick={() => setModal('about')}>
+        <button className="nav-link" onClick={() => setModal('about')}>
           About
         </button>
         <button className="nav-link" onClick={() => setModal('help')}>

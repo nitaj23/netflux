@@ -1,4 +1,4 @@
-import { get, post, upload } from './client'
+import { apiUrl, get, post, upload } from './client'
 import type {
   CompoundOrganismOut,
   OrganismRow,
@@ -72,3 +72,11 @@ export interface DesignBody {
 export const submitDesign = (body: DesignBody) => post<JobSubmit>('/designs', body)
 
 export const fetchJob = (jobId: string) => get<JobState>(`/jobs/${encodeURIComponent(jobId)}`)
+
+/** Direct-download URL for the base GEM behind a run (repo file or uploaded GEM), else null. */
+export const modelDownloadUrl = (source: SourceSpec): string | null =>
+  source.strategy === 'repo'
+    ? apiUrl(`/models/${source.model_id}/download`)
+    : source.strategy === 'custom'
+      ? apiUrl(`/gems/${encodeURIComponent(source.gem_token)}/download`)
+      : null

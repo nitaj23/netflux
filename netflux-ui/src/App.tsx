@@ -28,6 +28,7 @@ export default function App() {
       setTabs((ts) => [...ts, { id, title: `Subgraph ${id}`, snapshot, status: 'loading' }])
       setActive(id)
       setLastSubgraph(id)
+      setCollapsed(true)
       extractPathway(snapshot.source, snapshot.target).then(
         (data) => patch(id, { status: 'done', data }),
         (e) => patch(id, { status: 'error', error: asApiError(e) }),
@@ -77,15 +78,24 @@ export default function App() {
     <div className="app">
       <Header />
       <main className={collapsed ? 'layout collapsed' : 'layout'}>
-        <div className="side">
+        {collapsed && (
+          <button className="restore" onClick={() => setCollapsed(false)} aria-label="Show parameters">
+            ☰ Parameters
+          </button>
+        )}
+        {/* Kept mounted while collapsed so the form keeps its state. */}
+        <div className="side" hidden={collapsed}>
           <div className="side-head">
             <h2>Parameters</h2>
-            <button className="collapse" onClick={() => setCollapsed((c) => !c)} aria-label={collapsed ? 'Show parameters' : 'Hide parameters'}>
-              {collapsed ? '>>>' : '<<<'}
+            <button className="collapse" onClick={() => setCollapsed(true)} aria-label="Hide parameters" title="Hide parameters">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <line x1="10" y1="4" x2="10" y2="20" />
+                <path d="M16 9l-3 3 3 3" />
+              </svg>
             </button>
           </div>
-          {/* Kept mounted while collapsed so the form keeps its state. */}
-          <div className="panel" hidden={collapsed}>
+          <div className="panel">
             <ParamPanel onGenerate={generate} />
           </div>
         </div>

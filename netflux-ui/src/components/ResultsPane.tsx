@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { ApiError } from '../api/client'
-import { fetchJob } from '../api/endpoints'
-import { base64ToBytes, safeName, saveBlob } from '../lib/download'
+import { fetchJob, modelDownloadUrl } from '../api/endpoints'
+import { base64ToBytes, downloadUrl, safeName, saveBlob } from '../lib/download'
 import type { ActiveKey, SubgraphTab } from '../state'
 import { InterventionsView } from './InterventionsView'
 import { SubgraphView } from './SubgraphView'
@@ -53,6 +53,8 @@ export function ResultsPane({ tabs, active, designTab, onActivate, onClose, onSt
         label: 'GraphML (.graphml)',
         run: () => saveBlob(`${base}.graphml`, base64ToBytes(d.graphml_base64!), 'application/graphml+xml'),
       })
+    const modelUrl = modelDownloadUrl(current.snapshot.source)
+    if (modelUrl) items.push({ label: 'Base model (.json)', run: () => downloadUrl(modelUrl) })
   }
 
   const showEmptySubgraph = tabs.length === 0 && active !== 'interventions'
@@ -109,7 +111,7 @@ export function ResultsPane({ tabs, active, designTab, onActivate, onClose, onSt
       <div className="footer">
         <div className="dl">
           <button className="pill dark" disabled={items.length === 0} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
-            download as &gt;
+            Download
           </button>
           {menu && items.length > 0 && (
             <ul className="menu" role="menu" onMouseLeave={() => setMenu(false)}>

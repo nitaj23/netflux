@@ -1,0 +1,23 @@
+# Keep the backend build context small and correct.
+# The frontend is built by compose/Vercel, never by the backend Dockerfile.
+netflux-ui/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Regenerated inside the image by `python -m src.build_db`; never ship the local copy.
+mfghub.db
+mfghub.db-shm
+mfghub.db-wal
+
+.git/
+.gitignore
+tests/
+.pytest_cache/
+*.pt
+
+# Local tooling / editor noise
+.vscode/
+.idea/
+*.log

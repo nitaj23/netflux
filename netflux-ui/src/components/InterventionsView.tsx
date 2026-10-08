@@ -84,9 +84,12 @@ export function InterventionsView({ tab, onStart, onRetry }: Props) {
   if (tab.status === 'loading') return <div className="state">Waiting for {tab.title} to finish…</div>
   if (tab.status === 'error') return <div className="state">{tab.title} failed, so there is nothing to rank.</div>
 
+  // label is "Organism → Compound"; italicise the organism (scientific-name convention).
+  const [org, ...rest] = tab.snapshot.label.split(' → ')
   const header = (
     <p className="muted for">
-      For {tab.title} · {tab.snapshot.label}
+      For <b>{tab.title}</b> · <i>{org}</i>
+      {rest.length > 0 && <> → {rest.join(' → ')}</>}
     </p>
   )
 

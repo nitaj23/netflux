@@ -2,6 +2,9 @@ import type { ApiErrorBody } from './types'
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api/v1'
 
+/** Absolute URL for a backend path — for direct downloads (GET with a file body). */
+export const apiUrl = (path: string) => `${BASE}${path}`
+
 /** Every backend failure arrives as {error, detail, hint}; this carries it intact. */
 export class ApiError extends Error {
   readonly status: number

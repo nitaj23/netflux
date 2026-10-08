@@ -9,6 +9,16 @@ export function saveBlob(filename: string, data: BlobPart, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
+/** Trigger a browser download from a URL whose response carries Content-Disposition. */
+export function downloadUrl(url: string) {
+  const a = document.createElement('a')
+  a.href = url
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
 export function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const bin = atob(b64)
   const out = new Uint8Array(bin.length)

@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PathwayResponse } from '../api/types'
-import { RW, computeLayout, type Arrange, type PlacedNode, type Rxn } from '../lib/pathwayLayout'
+import { RW, computeLayout, type PlacedNode, type Rxn } from '../lib/pathwayLayout'
+
+// Almost-transparent subsystem films, cycled by index. Easy on the eyes against the dark teal canvas.
+const FILM_FILL = ['rgba(247,111,142,0.06)', 'rgba(244,241,187,0.055)', 'rgba(143,212,166,0.06)', 'rgba(230,235,224,0.045)']
+const FILM_STROKE = ['rgba(247,111,142,0.24)', 'rgba(244,241,187,0.22)', 'rgba(143,212,166,0.24)', 'rgba(230,235,224,0.20)']
 
 const TAGS: Record<string, { label: string; color: string; note: string }> = {
   protected: { label: 'Protected', color: '#f2798c', note: 'backbone, coupled to target' },
@@ -35,18 +39,16 @@ interface Props {
 }
 
 export function SubgraphView({ data, target, carbonSource }: Props) {
-  const [arrange, setArrange] = useState<Arrange>('subsystem')
-  const [corridor, setCorridor] = useState(true)
   const [cofactors, setCofactors] = useState(false)
   const [metLabels, setMetLabels] = useState(true)
-  const [picked, setPicked] = useState<string | null>(null)
+  const [hover, setHover] = useState<string | null>(null)
   const [view, setView] = useState<View>({ k: 1, tx: 0, ty: 0 })
   const box = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved: boolean } | null>(null)
 
   const layout = useMemo(
-    () => computeLayout(data, target, carbonSource, { arrange, corridor, cofactors }),
-    [data, target, carbonSource, arrange, corridor, cofactors],
+    () => computeLayout(data, target, carbonSource, { cofactors }),
+    [data, target, carbonSource, cofactors],
   )
 
   const fit = useCallback(() => {
@@ -55,12 +57,35 @@ export function SubgraphView({ data, target, carbonSource }: Props) {
     const { x0, x1, y0, y1 } = layout.bbox
     const w = el.clientWidth
     const h = el.clientHeight
-    const k = Math.min(1.3, Math.max(0.05, Math.min(w / (x1 - x0), h / (y1 - y0))))
-    setView({ k, tx: (w - (x1 - x0) * k) / 2 - x0 * k, ty: (h - (y1 - y0) * k) / 2 - y0 * k })
+    const dx = x1 - x0
+    const dy = y1 - y0
+    // Guard against an unlaid-out element or an empty/degenerate bbox (Infinity from Math.min of
+    // no nodes) — either would make tx/ty NaN and the whole graph <g> vanish.
+    if (w <= 1 || h <= 1 || !(dx > 0) || !(dy > 0) || !Number.isFinite(dx) || !Number.isFinite(dy)) return
+    const k = Math.min(2.4, Math.max(0.05, Math.min(w / dx, h / dy)))
+    setView({ k, tx: (w - dx * k) / 2 - x0 * k, ty: (h - dy * k) / 2 - y0 * k })
   }, [layout])
 
+  // Refit when the layout changes (filters) and whenever the graph box resizes — opening the
+  // details panel, collapsing Parameters, or resizing the window. ResizeObserver fires after
+  // layout settles, so fit() always reads the real post-change size (no blank-view race).
   useEffect(() => {
     fit()
+  }, [fit])
+
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    let raf = 0
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => fit())
+    })
+    ro.observe(el)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
   }, [fit])
 
   // Wheel needs a non-passive listener to stop the page scrolling.
@@ -93,11 +118,11 @@ export function SubgraphView({ data, target, carbonSource }: Props) {
     })
   }
 
-  const selected = picked ? layout.nodes.get(picked) : undefined
+  const hoverNode = hover ? layout.nodes.get(hover) : undefined
   const colorOf = (r: Rxn) => TAGS[r.design]?.color ?? PLAIN
 
   return (
-    <div className={selected ? 'graph-wrap side' : 'graph-wrap'}>
+    <div className="graph-wrap">
       <div
         ref={box}
         className="graph"
@@ -114,8 +139,6 @@ export function SubgraphView({ data, target, carbonSource }: Props) {
           if (d.moved) setView((v) => ({ ...v, tx: d.tx + dx, ty: d.ty + dy }))
         }}
         onPointerUp={() => {
-          // A press that never moved is a click on the background.
-          if (drag.current && !drag.current.moved) setPicked(null)
           drag.current = null
         }}
       >
@@ -129,13 +152,15 @@ export function SubgraphView({ data, target, carbonSource }: Props) {
             </marker>
           </defs>
           <g transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>
-            {arrange === 'subsystem' &&
-              layout.lanes.map((l, i) => (
-                <g key={l.name}>
-                  <rect x={layout.bbox.x0} width={layout.bbox.x1 - layout.bbox.x0} y={l.top} height={l.bottom - l.top} fill={i % 2 ? 'rgba(255,255,255,0.045)' : 'rgba(255,255,255,0.015)'} />
-                  <LaneLabel x={layout.bbox.x0 + 10} y={(l.top + l.bottom) / 2} name={l.name} />
-                </g>
-              ))}
+            {layout.films.map((f, i) => (
+              <g key={f.name} pointerEvents="none">
+                <rect x={f.x0} y={f.y0} width={f.x1 - f.x0} height={f.y1 - f.y0} rx={16} fill={FILM_FILL[i % FILM_FILL.length]} stroke={FILM_STROKE[i % FILM_STROKE.length]} strokeWidth={1} />
+                <text className="film-label" x={f.x0 + 14} y={f.y0 + 18}>
+                  <title>{f.name}</title>
+                  {clip(f.name, 30)}
+                </text>
+              </g>
+            ))}
 
             {layout.edges.map((e) => {
               const a = layout.nodes.get(e.s)!
@@ -160,12 +185,11 @@ export function SubgraphView({ data, target, carbonSource }: Props) {
             {[...layout.nodes.values()]
               .filter((n) => n.kind === 'm')
               .map((n) => (
-                <g key={n.key} className="mnode" onClick={(ev) => (ev.stopPropagation(), setPicked(n.key))} onPointerDown={(ev) => ev.stopPropagation()}>
-                  <title>{`${n.id}${n.met?.compartment ? ` · ${COMPARTMENT[n.met.compartment] ?? n.met.compartment}` : ''}${n.met?.currency ? ' · cofactor' : ''}`}</title>
-                  <circle cx={n.x} cy={n.y} r={n.met?.currency ? 3.5 : 5.5} fill={n.met?.currency ? '#2a3640' : '#a9bac4'} stroke={picked === n.key ? '#fff' : '#33454f'} strokeWidth={picked === n.key ? 2 : 1} />
+                <g key={n.key} className="mnode" onMouseEnter={() => setHover(n.key)} onMouseLeave={() => setHover((h) => (h === n.key ? null : h))}>
+                  <circle cx={n.x} cy={n.y} r={n.met?.currency ? 6 : 10} fill={n.met?.currency ? '#294746' : '#bfd0c9'} stroke={hover === n.key ? '#fff' : '#3a5c5a'} strokeWidth={hover === n.key ? 2.5 : 1.3} />
                   {metLabels && (
-                    <text className="mlabel" x={n.x} y={n.y + 16}>
-                      {clip(n.id, 14)}
+                    <text className="mlabel" x={n.x} y={n.y + 30}>
+                      {clip(n.id, 18)}
                     </text>
                   )}
                 </g>
@@ -174,24 +198,26 @@ export function SubgraphView({ data, target, carbonSource }: Props) {
             {[...layout.nodes.values()]
               .filter((n) => n.kind === 'r')
               .map((n) => (
-                <ReactionGlyph key={n.key} n={n} color={colorOf(n.rxn!)} selected={picked === n.key} onPick={() => setPicked(n.key)} />
+                <ReactionGlyph
+                  key={n.key}
+                  n={n}
+                  color={colorOf(n.rxn!)}
+                  selected={hover === n.key}
+                  onEnter={() => setHover(n.key)}
+                  onLeave={() => setHover((h) => (h === n.key ? null : h))}
+                />
               ))}
           </g>
         </svg>
       </div>
 
-      <div className="graph-tools">
-        <div className="seg" role="group" aria-label="Arrangement">
-          <button aria-pressed={arrange === 'subsystem'} onClick={() => setArrange('subsystem')}>
-            By subsystem
-          </button>
-          <button aria-pressed={arrange === 'flow'} onClick={() => setArrange('flow')}>
-            Flow only
-          </button>
+      {layout.nodes.size === 0 && (
+        <div className="state muted" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+          No reactions to display for this subgraph.
         </div>
-        <button className="chip-btn" aria-pressed={corridor} onClick={() => setCorridor((c) => !c)} title="Show the dominant substrate-to-target route plus reactions carrying at least 10% of the target flux">
-          Main route only
-        </button>
+      )}
+
+      <div className="graph-tools">
         <button className="chip-btn" aria-pressed={cofactors} onClick={() => setCofactors((c) => !c)} title="Draw links that exist only through ATP, NADH, H⁺ and similar">
           Cofactors
         </button>
@@ -217,7 +243,12 @@ export function SubgraphView({ data, target, carbonSource }: Props) {
           Showing {layout.shown} of {layout.total} reactions · flow runs left to right · line width = mass flow
         </span>
         <span className="keys">
-          <i className="ring" style={{ borderColor: SRC }} /> substrate <i className="ring" style={{ borderColor: TGT }} /> target
+          <span className="key-hi">
+            <i className="ring" style={{ borderColor: SRC }} /> <b>Carbon source / substrate</b>
+          </span>
+          <span className="key-hi">
+            <i className="ring" style={{ borderColor: TGT }} /> <b>Target</b>
+          </span>
           {layout.designs.map((d) => (
             <span key={d} title={TAGS[d]?.note}>
               <i style={{ background: TAGS[d]?.color ?? PLAIN }} /> {TAGS[d]?.label ?? d}
@@ -227,72 +258,75 @@ export function SubgraphView({ data, target, carbonSource }: Props) {
         </span>
       </div>
 
-      {selected && <Details node={selected} onClose={() => setPicked(null)} />}
+      {hoverNode && <Tooltip node={hoverNode} view={view} box={box.current} />}
     </div>
   )
 }
 
-/** Subsystem name in the left gutter, wrapped onto at most two lines. */
-function LaneLabel({ x, y, name }: { x: number; y: number; name: string }) {
-  const words = name.split(/\s+/)
-  const lines: string[] = ['']
-  for (const w of words) {
-    const cur = lines[lines.length - 1]
-    if (cur && (cur + ' ' + w).length > 22 && lines.length < 2) lines.push(w)
-    else lines[lines.length - 1] = cur ? `${cur} ${w}` : w
-  }
-  return (
-    <text className="lane-label" x={x} y={y - (lines.length - 1) * 7 + 4}>
-      <title>{name}</title>
-      {lines.map((ln, i) => (
-        <tspan key={i} x={x} dy={i ? 14 : 0}>
-          {clip(ln, 24)}
-        </tspan>
-      ))}
-    </text>
-  )
-}
-
-function ReactionGlyph({ n, color, selected, onPick }: { n: PlacedNode; color: string; selected: boolean; onPick: () => void }) {
+function ReactionGlyph({ n, color, selected, onEnter, onLeave }: { n: PlacedNode; color: string; selected: boolean; onEnter: () => void; onLeave: () => void }) {
   const r = n.rxn!
   return (
-    <g className={n.cofactorOnly ? 'rgroup cof' : 'rgroup'} onClick={(e) => (e.stopPropagation(), onPick())} onPointerDown={(e) => e.stopPropagation()}>
+    <g className={n.cofactorOnly ? 'rgroup cof' : 'rgroup'} onMouseEnter={onEnter} onMouseLeave={onLeave}>
       <title>{`${r.name} (${r.id})`}</title>
-      <rect x={n.x - RW - 8} y={n.y - 20} width={2 * RW + 16} height={30} fill="transparent" />
-      {n.onSpine && <line x1={n.x - RW} x2={n.x + RW} y1={n.y} y2={n.y} stroke="#c9d6de" strokeWidth={9} strokeLinecap="round" opacity={0.16} />}
-      {(r.isSource || r.isTarget) && <rect x={n.x - RW - 5} y={n.y - 9} width={2 * RW + 10} height={18} rx={4} fill="none" stroke={r.isTarget ? TGT : SRC} strokeWidth={1.4} />}
-      {selected && <rect x={n.x - RW - 7} y={n.y - 11} width={2 * RW + 14} height={22} rx={5} fill="none" stroke="#fff" strokeWidth={1.6} />}
-      <line x1={n.x - RW} x2={n.x + RW} y1={n.y} y2={n.y} stroke={color} strokeWidth={3.6} strokeLinecap="round" />
-      <path d={`M${n.x + RW - 1},${n.y - 4} L${n.x + RW + 6},${n.y} L${n.x + RW - 1},${n.y + 4} z`} fill={color} />
-      <text className="rlabel" x={n.x} y={n.y - 9}>
-        {clip(r.name, 24)}
+      <rect x={n.x - RW - 10} y={n.y - 30} width={2 * RW + 20} height={46} fill="transparent" />
+      {n.onSpine && <line x1={n.x - RW} x2={n.x + RW} y1={n.y} y2={n.y} stroke="#c9d6de" strokeWidth={15} strokeLinecap="round" opacity={0.16} />}
+      {(r.isSource || r.isTarget) && <rect x={n.x - RW - 7} y={n.y - 13} width={2 * RW + 14} height={26} rx={7} fill="none" stroke={r.isTarget ? TGT : SRC} strokeWidth={2.2} />}
+      {selected && <rect x={n.x - RW - 10} y={n.y - 16} width={2 * RW + 20} height={32} rx={8} fill="none" stroke="#fff" strokeWidth={1.8} />}
+      <line x1={n.x - RW} x2={n.x + RW} y1={n.y} y2={n.y} stroke={color} strokeWidth={6.5} strokeLinecap="round" />
+      <path d={`M${n.x + RW - 1},${n.y - 7} L${n.x + RW + 11},${n.y} L${n.x + RW - 1},${n.y + 7} z`} fill={color} />
+      <text className="rlabel" x={n.x} y={n.y - 17}>
+        {clip(r.name, 28)}
       </text>
     </g>
   )
 }
 
-function Details({ node, onClose }: { node: PlacedNode; onClose: () => void }) {
+/** Floating annotation near the hovered node, clamped so the whole box stays inside the canvas. */
+function Tooltip({ node, view, box }: { node: PlacedNode; view: View; box: HTMLDivElement | null }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+
+  // Measure the real box size, then place it beside the node but fully within the canvas.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || !box) return
+    const M = 8
+    const bw = box.clientWidth
+    const bh = box.clientHeight
+    const tw = el.offsetWidth
+    const th = el.offsetHeight
+    const sx = node.x * view.k + view.tx
+    const sy = node.y * view.k + view.ty
+    let left = sx + 16
+    if (left + tw > bw - M) left = sx - 16 - tw // flip to the node's left
+    left = Math.min(Math.max(M, left), Math.max(M, bw - tw - M))
+    const top = Math.min(Math.max(M, sy + 14), Math.max(M, bh - th - M))
+    setPos({ left, top })
+  }, [node, view, box])
+
   return (
-    <aside className="node-info" aria-live="polite">
-      <button className="icon-btn" onClick={onClose} aria-label="Close details">
-        ×
-      </button>
+    <div
+      ref={ref}
+      className="node-tip"
+      style={pos ? { left: pos.left, top: pos.top } : { left: 0, top: 0, visibility: 'hidden' }}
+      aria-live="polite"
+    >
       {node.rxn ? <ReactionDetails r={node.rxn} /> : <MetaboliteDetails id={node.id} comp={node.met?.compartment ?? ''} currency={!!node.met?.currency} />}
-    </aside>
+    </div>
   )
 }
 
 function ReactionDetails({ r }: { r: Rxn }) {
   const tag = TAGS[r.design]
-  const flags = [r.isSource && 'substrate uptake', r.isTarget && 'target'].filter(Boolean).join(' · ')
+  const flags = [r.isSource && 'Substrate uptake', r.isTarget && 'Target product'].filter(Boolean).join(' · ')
   return (
     <>
       <h3>{r.name}</h3>
-      <p className="muted id">{r.id}</p>
-      {flags && <p className="flag">{flags}</p>}
+      <p className="muted id mono">{r.id}</p>
+      {flags && <p className="flag">{flags}.</p>}
       {tag && (
         <p className="tag" style={{ color: tag.color }}>
-          {tag.label} <span className="muted">· {tag.note}</span>
+          {tag.label} <span className="muted">— {tag.note}.</span>
         </p>
       )}
       <dl>
@@ -302,7 +336,7 @@ function ReactionDetails({ r }: { r: Rxn }) {
           <>
             <dt>FVA range</dt>
             <dd>
-              {fmt(r.vMin)} .. {fmt(r.vMax)}
+              {fmt(r.vMin)} to {fmt(r.vMax)}
               {r.cls && <span className="muted"> ({r.cls})</span>}
             </dd>
           </>
@@ -315,10 +349,10 @@ function ReactionDetails({ r }: { r: Rxn }) {
         )}
         <dt>Bounds</dt>
         <dd>
-          {fmt(r.lb)} .. {fmt(r.ub)}
+          {fmt(r.lb)} to {fmt(r.ub)}
         </dd>
         <dt>Subsystem</dt>
-        <dd>{r.subsystem}</dd>
+        <dd>{r.subsystem || 'Unknown'}</dd>
         <dt>Genes</dt>
         <dd>{r.genes.length ? r.genes.join(', ') : '—'}</dd>
         {r.geneRule && (
@@ -329,13 +363,13 @@ function ReactionDetails({ r }: { r: Rxn }) {
         )}
         {r.ins.length > 0 && (
           <>
-            <dt>Takes in</dt>
+            <dt>Consumes</dt>
             <dd className="mono">{r.ins.join(', ')}</dd>
           </>
         )}
         {r.outs.length > 0 && (
           <>
-            <dt>Passes on</dt>
+            <dt>Produces</dt>
             <dd className="mono">{r.outs.join(', ')}</dd>
           </>
         )}
@@ -347,12 +381,12 @@ function ReactionDetails({ r }: { r: Rxn }) {
 function MetaboliteDetails({ id, comp, currency }: { id: string; comp: string; currency: boolean }) {
   return (
     <>
-      <h3>{id}</h3>
+      <h3 className="mono">{id}</h3>
       <dl>
         <dt>Compartment</dt>
-        <dd>{comp ? `${comp} (${COMPARTMENT[comp] ?? 'unknown'})` : '—'}</dd>
+        <dd>{comp ? `${COMPARTMENT[comp] ?? 'Unknown'} (${comp})` : '—'}</dd>
         <dt>Role</dt>
-        <dd>{currency ? 'cofactor' : 'carbon carrier'}</dd>
+        <dd>{currency ? 'Cofactor / currency metabolite' : 'Carbon carrier'}</dd>
       </dl>
     </>
   )

@@ -345,7 +345,11 @@ export function ParamPanel({ onGenerate }: { onGenerate: (s: RunSnapshot) => voi
           <input className="field unit" value={UNIT} readOnly tabIndex={-1} aria-label="UB unit" />
         </div>
       </div>
-      {boundsExchange && defaults && <p className="note">Bounds apply to {boundsExchange}</p>}
+      {boundsExchange && defaults && (
+        <p className="note">
+          Bounds apply to <b>{boundsExchange}</b>
+        </p>
+      )}
 
       <div className="row">
         <label htmlFor="objective">Objective</label>

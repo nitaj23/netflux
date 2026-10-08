@@ -8,13 +8,16 @@ thing that gives queued/running/completed/failed with typed-error retention.
 """
 from __future__ import annotations
 
+import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Callable
 
-MAX_CONCURRENT_DESIGN_JOBS = 4
+# Env-configurable so deployments (compose, Cloud Run) can tune concurrency to
+# the instance's RAM without a code change. Defaults to 4 to preserve prior behaviour.
+MAX_CONCURRENT_DESIGN_JOBS = int(os.getenv("NETFLUX_MAX_DESIGN_JOBS", "4"))
 
 
 def default_error_payload(exc: BaseException) -> dict:

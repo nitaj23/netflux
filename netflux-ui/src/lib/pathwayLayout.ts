@@ -3,11 +3,7 @@
 // subsystem lanes. Pure functions: no DOM, no React.
 import type { PathwayResponse } from '../api/types'
 
-export type Arrange = 'subsystem' | 'flow'
 export interface LayoutOpts {
-  arrange: Arrange
-  /** Keep only reactions on a source -> target route. */
-  corridor: boolean
   /** Draw links that exist only through cofactors (ATP, NADH, H+ ...). */
   cofactors: boolean
 }
@@ -59,16 +55,19 @@ export interface PlacedEdge {
   spine: boolean
 }
 
-export interface Lane {
+/** Translucent box drawn behind the reactions of one subsystem. */
+export interface Film {
   name: string
-  top: number
-  bottom: number
+  x0: number
+  y0: number
+  x1: number
+  y1: number
 }
 
 export interface Layout {
   nodes: Map<string, PlacedNode>
   edges: PlacedEdge[]
-  lanes: Lane[]
+  films: Film[]
   bbox: { x0: number; y0: number; x1: number; y1: number }
   maxMass: number
   shown: number
@@ -77,13 +76,11 @@ export interface Layout {
   designs: string[]
 }
 
-export const COLW = 150
-export const ROWH = 40
+export const COLW = 300
+export const ROWH = 44
 export const LABEL_W = 180
-export const RW = 22
-const PAD = 6
-/** "Main route" keeps reactions carrying at least this share of the target's flux. */
-export const MAIN_FLUX_SHARE = 0.1
+export const RW = 38
+const PAD = 12
 
 const CURRENCY = new Set([
   'h', 'h2o', 'atp', 'adp', 'amp', 'pi', 'ppi', 'nad', 'nadh', 'nadp', 'nadph', 'co2', 'o2', 'coa', 'nh4', 'fad',
@@ -172,20 +169,13 @@ export function computeLayout(data: PathwayResponse, target: string, carbonSourc
     }
     return seen
   }
-  const toTgt = bfs([target], rev)
-  const routes = (from: string[]) => {
-    const fromSrc = bfs(from, fwd)
-    return new Set([...fromSrc].filter((id) => toTgt.has(id)))
-  }
-  let corridor = routes(sources)
-  if (!corridor.has(target)) {
-    // The chosen substrate does not reach the target here: fall back to every natural entry point.
+  // If the chosen substrate does not reach the target, fall back to every natural entry point so
+  // the ranks (left-to-right flow) and the source highlight still make sense.
+  if (!bfs(sources, fwd).has(target)) {
     const entries = [...rx.keys()].filter((id) => rev.get(id)!.length === 0 && id !== target)
     sources = entries.length ? entries : sources
     for (const r of rx.values()) r.isSource = sources.includes(r.id)
-    corridor = routes(sources)
   }
-  if (!corridor.has(target)) corridor = new Set(rx.keys()) // truly disconnected: show everything rather than nothing
 
   // Dominant-flux source -> target route (weights log(max/mf)); always drawn.
   const spine = dominantRoute(edgesIn, sources, target, [...rx.keys()])
@@ -219,21 +209,7 @@ export function computeLayout(data: PathwayResponse, target: string, carbonSourc
   for (const id of rx.keys()) if (!rank.has(id)) rank.set(id, back.has(id) ? Math.max(0, maxF - back.get(id)!) : maxF)
   rank.set(target, Math.max(...rank.values()) + 1)
 
-  // Main route: the dominant route plus reactions carrying a real share of the product flux,
-  // kept only while they stay connected to that route (no orphan islands).
-  const tFlux = Math.abs(rx.get(target)!.flux) || Math.max(...[...rx.values()].map((r) => Math.abs(r.flux)))
-  const significant = new Set([...corridor].filter((id) => spineNode.has(id) || Math.abs(rx.get(id)!.flux) >= MAIN_FLUX_SHARE * tFlux))
-  let main = significant
-  if (spine.length) {
-    const adj = new Map<string, string[]>([...significant].map((id) => [id, []]))
-    for (const e of edgesIn)
-      if (significant.has(e.source) && significant.has(e.target)) {
-        adj.get(e.source)!.push(e.target)
-        adj.get(e.target)!.push(e.source)
-      }
-    main = bfs(spine, adj)
-  }
-  const kept = opts.corridor ? main : new Set(rx.keys())
+  const kept = new Set(rx.keys())
 
   // One key metabolite per edge: the rarest non-cofactor (hubs like CoA would collapse the map).
   const links: { a: string; b: string; met: string; mass: number; spine: boolean }[] = []
@@ -256,7 +232,8 @@ export function computeLayout(data: PathwayResponse, target: string, carbonSourc
   // Bipartite nodes: reactions on integer ranks, metabolites on half-integer ranks between them.
   type Tmp = { key: string; kind: 'r' | 'm'; id: string; rank: number; lane: string }
   const tmp = new Map<string, Tmp>()
-  const laneOf = (r: Rxn) => (opts.arrange === 'subsystem' ? r.subsystem : '')
+  // Level-wise layout: every node shares one lane, so x is set purely by flow rank.
+  const laneOf = (_r: Rxn) => ''
   for (const id of kept) {
     // A reaction linked to the map only through cofactors would float alone; show it only with "Cofactors" on.
     if (!linked.has(id) && !spineNode.has(id)) continue
@@ -305,9 +282,9 @@ export function computeLayout(data: PathwayResponse, target: string, carbonSourc
     const lane = k.slice(0, k.lastIndexOf('|'))
     laneRows.set(lane, Math.max(laneRows.get(lane) ?? 1, arr.length))
   }
-  const laneBox = new Map<string, Lane>()
+  const laneBox = new Map<string, { name: string; top: number; bottom: number }>()
   let yCursor = 0
-  const hasLabel = opts.arrange === 'subsystem'
+  const hasLabel = false
   for (const name of laneNames) {
     const h = 2 * PAD + laneRows.get(name)! * ROWH
     laneBox.set(name, { name, top: yCursor, bottom: yCursor + h })
@@ -353,8 +330,26 @@ export function computeLayout(data: PathwayResponse, target: string, carbonSourc
     nodes.set(n.key, base)
   }
   const xs = [...nodes.values()].map((n) => n.x)
-  const bbox = { x0: Math.min(...xs) - 110 - (hasLabel ? LABEL_W : 0), x1: Math.max(...xs) + 110, y0: 0, y1: Math.max(yCursor, 1) }
-  const lanes = laneNames.map((n) => laneBox.get(n)!)
+  const bbox = { x0: Math.min(...xs) - 60 - (hasLabel ? LABEL_W : 0), x1: Math.max(...xs) + 60, y0: -16, y1: Math.max(yCursor, 1) }
+
+  // Translucent film per subsystem: bounding box over that subsystem's reaction nodes.
+  const FILM_PAD = 20
+  const fmap = new Map<string, Film>()
+  for (const n of nodes.values()) {
+    if (n.kind !== 'r' || !n.rxn) continue
+    const name = n.rxn.subsystem || 'Unknown'
+    const f = fmap.get(name)
+    if (!f) fmap.set(name, { name, x0: n.x - RW, y0: n.y, x1: n.x + RW, y1: n.y })
+    else {
+      f.x0 = Math.min(f.x0, n.x - RW)
+      f.y0 = Math.min(f.y0, n.y)
+      f.x1 = Math.max(f.x1, n.x + RW)
+      f.y1 = Math.max(f.y1, n.y)
+    }
+  }
+  const films = [...fmap.values()]
+    .map((f) => ({ name: f.name, x0: f.x0 - FILM_PAD, y0: f.y0 - ROWH / 2, x1: f.x1 + FILM_PAD, y1: f.y1 + ROWH / 2 }))
+    .sort((a, b) => a.x0 - b.x0 || a.y0 - b.y0)
   const comps = new Set<string>()
   for (const n of nodes.values()) if (n.met?.compartment) comps.add(n.met.compartment)
   const designs = new Set<string>()
@@ -363,7 +358,7 @@ export function computeLayout(data: PathwayResponse, target: string, carbonSourc
   return {
     nodes,
     edges,
-    lanes,
+    films,
     bbox,
     maxMass: Math.max(1e-12, ...edges.map((e) => e.mass)),
     shown: [...nodes.values()].filter((n) => n.kind === 'r').length,

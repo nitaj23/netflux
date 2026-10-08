@@ -20,7 +20,7 @@ from typing import Iterator
 from fastapi import (APIRouter, Depends, FastAPI, File, HTTPException, Path,
                      Query, Request, UploadFile)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -181,6 +181,26 @@ def get_model(model_id: int = Path(..., ge=1), db: Session = Depends(get_db)):
     if (row := db.get(Model, model_id)) is None:
         raise HTTPException(404, f"no model with id={model_id}")
     return row
+
+
+@router.get("/models/{model_id}/download", tags=["catalog"])
+def download_model(model_id: int = Path(..., ge=1), db: Session = Depends(get_db)):
+    """Download the original repository GEM (base model, COBRA-JSON), untouched."""
+    row = db.get(Model, model_id)
+    if row is None:
+        raise HTTPException(404, f"no model with id={model_id}")
+    return FileResponse(row.model_path, media_type="application/json",
+                        filename=os.path.basename(row.model_path))
+
+
+@router.get("/gems/{gem_token}/download", tags=["gems"])
+def download_gem(gem_token: str):
+    """Download an uploaded GEM (base model) as COBRA-JSON from the ephemeral cache."""
+    from cobra.io import to_json
+    model = tool.resolve_model({"strategy": "custom", "gem_token": gem_token})
+    name = model.id or "model"
+    return Response(content=to_json(model), media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="{name}.json"'})
 
 
 @router.get("/conditions", response_model=list[S.ConditionOut], tags=["catalog"])
