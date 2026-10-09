@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PathwayResponse } from '../api/types'
 import { RW, computeLayout, type PlacedNode, type Rxn } from '../lib/pathwayLayout'
+import { geneUrl } from '../lib/links'
 
 // Almost-transparent subsystem films, cycled by index. Easy on the eyes against the dark teal canvas.
 const FILM_FILL = ['rgba(247,111,142,0.06)', 'rgba(244,241,187,0.055)', 'rgba(143,212,166,0.06)', 'rgba(230,235,224,0.045)']
@@ -36,15 +37,28 @@ interface Props {
   data: PathwayResponse
   target: string
   carbonSource?: string
+  biggId?: string
+  organism?: string
 }
 
-export function SubgraphView({ data, target, carbonSource }: Props) {
+export function SubgraphView({ data, target, carbonSource, biggId, organism }: Props) {
   const [cofactors, setCofactors] = useState(false)
   const [metLabels, setMetLabels] = useState(true)
   const [hover, setHover] = useState<string | null>(null)
   const [view, setView] = useState<View>({ k: 1, tx: 0, ty: 0 })
   const box = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved: boolean } | null>(null)
+  // Hover open/close with a short grace period so the cursor can travel from node to tooltip
+  // (the tooltip is interactive, so its gene links are clickable).
+  const hoverTimer = useRef<number>(0)
+  const openHover = useCallback((key: string) => {
+    clearTimeout(hoverTimer.current)
+    setHover(key)
+  }, [])
+  const closeHover = useCallback(() => {
+    clearTimeout(hoverTimer.current)
+    hoverTimer.current = window.setTimeout(() => setHover(null), 140)
+  }, [])
 
   const layout = useMemo(
     () => computeLayout(data, target, carbonSource, { cofactors }),
@@ -185,7 +199,7 @@ export function SubgraphView({ data, target, carbonSource }: Props) {
             {[...layout.nodes.values()]
               .filter((n) => n.kind === 'm')
               .map((n) => (
-                <g key={n.key} className="mnode" onMouseEnter={() => setHover(n.key)} onMouseLeave={() => setHover((h) => (h === n.key ? null : h))}>
+                <g key={n.key} className="mnode" onMouseEnter={() => openHover(n.key)} onMouseLeave={closeHover}>
                   <circle cx={n.x} cy={n.y} r={n.met?.currency ? 6 : 10} fill={n.met?.currency ? '#294746' : '#bfd0c9'} stroke={hover === n.key ? '#fff' : '#3a5c5a'} strokeWidth={hover === n.key ? 2.5 : 1.3} />
                   {metLabels && (
                     <text className="mlabel" x={n.x} y={n.y + 30}>
@@ -203,8 +217,8 @@ export function SubgraphView({ data, target, carbonSource }: Props) {
                   n={n}
                   color={colorOf(n.rxn!)}
                   selected={hover === n.key}
-                  onEnter={() => setHover(n.key)}
-                  onLeave={() => setHover((h) => (h === n.key ? null : h))}
+                  onEnter={() => openHover(n.key)}
+                  onLeave={closeHover}
                 />
               ))}
           </g>
@@ -258,7 +272,16 @@ export function SubgraphView({ data, target, carbonSource }: Props) {
         </span>
       </div>
 
-      {hoverNode && <Tooltip node={hoverNode} view={view} box={box.current} />}
+      {hoverNode && (
+        <Tooltip
+          node={hoverNode}
+          view={view}
+          box={box.current}
+          geneHref={(g) => geneUrl(g, biggId, organism)}
+          onEnter={() => openHover(hoverNode.key)}
+          onLeave={closeHover}
+        />
+      )}
     </div>
   )
 }
@@ -282,7 +305,21 @@ function ReactionGlyph({ n, color, selected, onEnter, onLeave }: { n: PlacedNode
 }
 
 /** Floating annotation near the hovered node, clamped so the whole box stays inside the canvas. */
-function Tooltip({ node, view, box }: { node: PlacedNode; view: View; box: HTMLDivElement | null }) {
+function Tooltip({
+  node,
+  view,
+  box,
+  geneHref,
+  onEnter,
+  onLeave,
+}: {
+  node: PlacedNode
+  view: View
+  box: HTMLDivElement | null
+  geneHref: (gene: string) => string
+  onEnter: () => void
+  onLeave: () => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
@@ -310,13 +347,15 @@ function Tooltip({ node, view, box }: { node: PlacedNode; view: View; box: HTMLD
       className="node-tip"
       style={pos ? { left: pos.left, top: pos.top } : { left: 0, top: 0, visibility: 'hidden' }}
       aria-live="polite"
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
     >
-      {node.rxn ? <ReactionDetails r={node.rxn} /> : <MetaboliteDetails id={node.id} comp={node.met?.compartment ?? ''} currency={!!node.met?.currency} />}
+      {node.rxn ? <ReactionDetails r={node.rxn} geneHref={geneHref} /> : <MetaboliteDetails id={node.id} comp={node.met?.compartment ?? ''} currency={!!node.met?.currency} />}
     </div>
   )
 }
 
-function ReactionDetails({ r }: { r: Rxn }) {
+function ReactionDetails({ r, geneHref }: { r: Rxn; geneHref: (gene: string) => string }) {
   const tag = TAGS[r.design]
   const flags = [r.isSource && 'Substrate uptake', r.isTarget && 'Target product'].filter(Boolean).join(' · ')
   return (
@@ -354,7 +393,18 @@ function ReactionDetails({ r }: { r: Rxn }) {
         <dt>Subsystem</dt>
         <dd>{r.subsystem || 'Unknown'}</dd>
         <dt>Genes</dt>
-        <dd>{r.genes.length ? r.genes.join(', ') : '—'}</dd>
+        <dd>
+          {r.genes.length
+            ? r.genes.map((g, i) => (
+                <span key={g}>
+                  {i > 0 && ', '}
+                  <a className="gene-link" href={geneHref(g)} target="_blank" rel="noreferrer">
+                    {g}
+                  </a>
+                </span>
+              ))
+            : '—'}
+        </dd>
         {r.geneRule && (
           <>
             <dt>Gene rule</dt>

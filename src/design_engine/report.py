@@ -22,6 +22,7 @@ import csv
 import io
 from typing import Optional
 
+from . import errors as E
 from .schema import InterventionCandidate, RankingResult, ReactionAction
 
 # Compact, ASCII-safe action labels (CSV / terminal friendly).
@@ -30,6 +31,31 @@ _ACTION_LABEL = {
     "downregulation": "down",
     "knockout": "KO",
 }
+
+# Readable names for the raw translation_status codes shown in the "Translation" column.
+_TRANSLATION_LABEL = {
+    E.GPR_EXACT_KO: "Exact gene KO",
+    E.GPR_ALTERNATIVE_KO: "Alternative gene KOs",
+    E.GPR_REACTION_ONLY: "Reaction only",
+    E.GPR_NONE: "No GPR",
+    E.GPR_FAILURE: "GPR parse failure",
+    E.GPR_TRANSLATION_INCOMPLETE: "Translation incomplete",
+}
+
+
+def _translation_label(c: InterventionCandidate) -> str:
+    """Readable translation status; for regulatory hypotheses, name the direction."""
+    if c.translation_status == E.GPR_PUTATIVE:
+        dirs = {a.action for a in c.reaction_actions
+                if a.action in ("upregulation", "downregulation")}
+        if dirs == {"upregulation"}:
+            return "Putative up-regulation"
+        if dirs == {"downregulation"}:
+            return "Putative down-regulation"
+        if dirs:
+            return "Putative up/down-regulation"
+        return "Putative regulation"
+    return _TRANSLATION_LABEL.get(c.translation_status, c.translation_status)
 
 
 def _fmt(x: Optional[float], places: int = 4) -> Optional[float]:
@@ -139,11 +165,11 @@ def candidate_to_dict(c: InterventionCandidate) -> dict:
 _COLUMNS: tuple[tuple[str, str], ...] = (
     ("rank", "Rank"),
     ("intervention_label", "Interventions"),
-    ("cardinality", "k"),
-    ("verified_floor", "Floor"),
-    ("verified_ceiling", "Ceiling"),
+    ("cardinality", "Size (k)"),
+    ("verified_floor", "Yield floor"),
+    ("verified_ceiling", "Yield ceiling"),
     ("verified_growth", "Growth"),
-    ("retained_mu", "Retained mu"),
+    ("retained_mu", "Retained growth (μ)"),
     ("growth_robustness_ratio", "Robustness"),
     ("coupling_class", "Coupling"),
     ("translation_status", "Translation"),
@@ -163,7 +189,7 @@ def _row(c: InterventionCandidate) -> dict:
         "retained_mu": _fmt(c.retained_mu),
         "growth_robustness_ratio": _fmt(c.growth_robustness_ratio),
         "coupling_class": c.coupling_class,
-        "translation_status": c.translation_status,
+        "translation_status": _translation_label(c),
         "genes": _best_gene_ko(c),
         "flags": ", ".join(c.artifact_flags),
     }
@@ -197,11 +223,11 @@ def ranking_csv(result: RankingResult) -> str:
 
 _HYP_COLUMNS: tuple[tuple[str, str], ...] = (
     ("intervention_label", "Interventions"),
-    ("cardinality", "k"),
-    ("verified_floor", "Floor"),
-    ("verified_ceiling", "Ceiling"),
+    ("cardinality", "Size (k)"),
+    ("verified_floor", "Yield floor"),
+    ("verified_ceiling", "Yield ceiling"),
     ("verified_growth", "Growth"),
-    ("retained_mu", "Retained mu"),
+    ("retained_mu", "Retained growth (μ)"),
     ("coupling_class", "Coupling"),
     ("translation_status", "Translation"),
     ("genes", "Putative targets"),
@@ -222,7 +248,7 @@ def _hyp_row(c: InterventionCandidate) -> dict:
         "verified_growth": _fmt(c.verified_growth),
         "retained_mu": _fmt(c.retained_mu),
         "coupling_class": c.coupling_class,
-        "translation_status": c.translation_status,
+        "translation_status": _translation_label(c),
         "genes": putative,
     }
 

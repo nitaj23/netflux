@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { ApiError } from '../api/client'
 import { fetchJob } from '../api/endpoints'
+import { geneUrl, reactionUrl } from '../lib/links'
 import type { ResultTable } from '../api/types'
 import { useNow } from '../lib/hooks'
 import type { SubgraphTab } from '../state'
@@ -40,7 +41,35 @@ function GeneCell({ value, href }: { value: string; href: (gene: string) => stri
   )
 }
 
-function Table({ t, empty, geneHref }: { t: ResultTable; empty: string; geneHref: (gene: string) => string }) {
+/** Render "PGI:up@8.2, FUM:KO" with each reaction id (before its ':') linked. */
+function InterventionCell({ value, href }: { value: string; href: (rxn: string) => string | null }) {
+  if (value === '—') return <>—</>
+  return (
+    <>
+      {value.split(', ').map((part, i) => {
+        const colon = part.indexOf(':')
+        const rxn = colon === -1 ? part : part.slice(0, colon)
+        const rest = colon === -1 ? '' : part.slice(colon)
+        const url = href(rxn)
+        return (
+          <span key={i}>
+            {i > 0 && ', '}
+            {url ? (
+              <a className="gene-link" href={url} target="_blank" rel="noreferrer">
+                {rxn}
+              </a>
+            ) : (
+              rxn
+            )}
+            {rest}
+          </span>
+        )
+      })}
+    </>
+  )
+}
+
+function Table({ t, empty, geneHref, rxnHref }: { t: ResultTable; empty: string; geneHref: (gene: string) => string; rxnHref: (rxn: string) => string | null }) {
   if (!t.rows.length) return <p className="muted">{empty}</p>
   return (
     <div className="table-scroll">
@@ -56,7 +85,15 @@ function Table({ t, empty, geneHref }: { t: ResultTable; empty: string; geneHref
           {t.rows.map((r, i) => (
             <tr key={i}>
               {t.columns.map((c) => (
-                <td key={c.key}>{c.key === 'genes' ? <GeneCell value={cell(r[c.key])} href={geneHref} /> : cell(r[c.key])}</td>
+                <td key={c.key}>
+                  {c.key === 'genes' ? (
+                    <GeneCell value={cell(r[c.key])} href={geneHref} />
+                  ) : c.key === 'intervention_label' ? (
+                    <InterventionCell value={cell(r[c.key])} href={rxnHref} />
+                  ) : (
+                    cell(r[c.key])
+                  )}
+                </td>
               ))}
             </tr>
           ))}
@@ -180,13 +217,11 @@ export function InterventionsView({ tab, onStart, onRetry }: Props) {
   const r = j.result!
   const rejected = r.rejected && r.rejected.n > 0 ? Object.entries(r.rejected.reasons).map(([k, v]) => `${v} ${k.replace(/_/g, ' ')}`).join(', ') : null
 
-  // Repo (BiGG) models: link each gene to its exact BiGG gene page; otherwise an NCBI gene search
-  // scoped by organism (uploaded GEMs can use any id scheme).
+  // Repo (BiGG) models link to exact BiGG pages; uploaded GEMs fall back to an NCBI gene search
+  // (and reaction ids get no link, since NCBI has no reaction namespace).
   const { biggId, organism } = tab.snapshot
-  const geneHref = (gene: string) =>
-    biggId
-      ? `https://bigg.ucsd.edu/models/${encodeURIComponent(biggId)}/genes/${encodeURIComponent(gene)}`
-      : `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(`${gene} ${organism ?? ''}`.trim())}`
+  const geneHref = (gene: string) => geneUrl(gene, biggId, organism)
+  const rxnHref = (rxn: string) => reactionUrl(rxn, biggId)
   return (
     <div className="pane-scroll">
       {header}
@@ -200,9 +235,9 @@ export function InterventionsView({ tab, onStart, onRetry }: Props) {
         </div>
       )}
       <h3>Ranked designs</h3>
-      <Table t={r.table} empty={`No verified designs were found${rejected ? ` (rejected: ${rejected})` : ''}. See the leads below.`} geneHref={geneHref} />
+      <Table t={r.table} empty={`No verified designs were found${rejected ? ` (rejected: ${rejected})` : ''}. See the leads below.`} geneHref={geneHref} rxnHref={rxnHref} />
       <h3>Hypotheses (leads)</h3>
-      <Table t={r.hypotheses_table} empty="No hypotheses were produced." geneHref={geneHref} />
+      <Table t={r.hypotheses_table} empty="No hypotheses were produced." geneHref={geneHref} rxnHref={rxnHref} />
       {r.notes && r.notes.length > 0 && (
         <ul className="muted">
           {r.notes.map((n) => (

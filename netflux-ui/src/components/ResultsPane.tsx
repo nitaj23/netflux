@@ -104,7 +104,7 @@ export function ResultsPane({ tabs, active, designTab, onActivate, onClose, onSt
             {current.error instanceof ApiError && current.error.hint && <p className="hint">{current.error.hint}</p>}
           </div>
         ) : (
-          <SubgraphView data={current.data!} target={current.snapshot.target} carbonSource={current.snapshot.carbonSource} />
+          <SubgraphView data={current.data!} target={current.snapshot.target} carbonSource={current.snapshot.carbonSource} biggId={current.snapshot.biggId} organism={current.snapshot.organism} />
         )}
       </div>
 
