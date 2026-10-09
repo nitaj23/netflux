@@ -17,6 +17,7 @@ const PLAIN = '#8fb8c9'
 const SRC = '#6aa4ff'
 const TGT = '#f2798c'
 const LINK = '#5b6b78'
+const CORRIDOR = '#f4f1bb' // lemon chiffon — the main substrate→target route
 const COMPARTMENT: Record<string, string> = { c: 'cytosol', e: 'extracellular', p: 'periplasm', m: 'mitochondrion', x: 'peroxisome', n: 'nucleus', v: 'vacuole', g: 'golgi', r: 'ER', h: 'chloroplast', l: 'lysosome' }
 
 const fmt = (v: number | null | undefined) => {
@@ -162,7 +163,7 @@ export function SubgraphView({ data, target, carbonSource, biggId, organism }: P
               <path d="M0,0 L8,4 L0,8 z" fill={LINK} />
             </marker>
             <marker id="ahs" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
-              <path d="M0,0 L8,4 L0,8 z" fill="#c9d6de" />
+              <path d="M0,0 L8,4 L0,8 z" fill={CORRIDOR} />
             </marker>
           </defs>
           <g transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>
@@ -188,9 +189,9 @@ export function SubgraphView({ data, target, carbonSource, biggId, organism }: P
                   key={`${e.s}>${e.t}`}
                   d={`M${x1},${a.y} C${mx},${a.y} ${mx},${b.y} ${x2},${b.y}`}
                   fill="none"
-                  stroke={e.spine ? '#c9d6de' : LINK}
-                  strokeWidth={e.spine ? Math.max(2, w) : w}
-                  strokeOpacity={e.spine ? 0.9 : 0.7}
+                  stroke={e.spine ? CORRIDOR : LINK}
+                  strokeWidth={e.spine ? Math.max(3, w) : w}
+                  strokeOpacity={e.spine ? 0.95 : 0.7}
                   markerEnd={e.spine ? 'url(#ahs)' : 'url(#ah)'}
                 />
               )
@@ -263,6 +264,9 @@ export function SubgraphView({ data, target, carbonSource, biggId, organism }: P
           <span className="key-hi">
             <i className="ring" style={{ borderColor: TGT }} /> <b>Target</b>
           </span>
+          <span className="key-hi">
+            <i style={{ background: CORRIDOR }} /> <b>Main route</b>
+          </span>
           {layout.designs.map((d) => (
             <span key={d} title={TAGS[d]?.note}>
               <i style={{ background: TAGS[d]?.color ?? PLAIN }} /> {TAGS[d]?.label ?? d}
@@ -292,7 +296,7 @@ function ReactionGlyph({ n, color, selected, onEnter, onLeave }: { n: PlacedNode
     <g className={n.cofactorOnly ? 'rgroup cof' : 'rgroup'} onMouseEnter={onEnter} onMouseLeave={onLeave}>
       <title>{`${r.name} (${r.id})`}</title>
       <rect x={n.x - RW - 10} y={n.y - 30} width={2 * RW + 20} height={46} fill="transparent" />
-      {n.onSpine && <line x1={n.x - RW} x2={n.x + RW} y1={n.y} y2={n.y} stroke="#c9d6de" strokeWidth={15} strokeLinecap="round" opacity={0.16} />}
+      {n.onSpine && <line x1={n.x - RW} x2={n.x + RW} y1={n.y} y2={n.y} stroke={CORRIDOR} strokeWidth={16} strokeLinecap="round" opacity={0.28} />}
       {(r.isSource || r.isTarget) && <rect x={n.x - RW - 7} y={n.y - 13} width={2 * RW + 14} height={26} rx={7} fill="none" stroke={r.isTarget ? TGT : SRC} strokeWidth={2.2} />}
       {selected && <rect x={n.x - RW - 10} y={n.y - 16} width={2 * RW + 20} height={32} rx={8} fill="none" stroke="#fff" strokeWidth={1.8} />}
       <line x1={n.x - RW} x2={n.x + RW} y1={n.y} y2={n.y} stroke={color} strokeWidth={6.5} strokeLinecap="round" />
