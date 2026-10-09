@@ -17,7 +17,30 @@ function cell(v: unknown): string {
   return String(v)
 }
 
-function Table({ t, empty }: { t: ResultTable; empty: string }) {
+/** Render a "g1 + g2 (partial)" gene cell with each gene id linked; suffix text kept as-is. */
+function GeneCell({ value, href }: { value: string; href: (gene: string) => string }) {
+  if (value === '—') return <>—</>
+  return (
+    <>
+      {value.split(' + ').map((seg, i) => {
+        const sp = seg.indexOf(' ') // split a leading gene id from any trailing " (partial)"
+        const gene = sp === -1 ? seg : seg.slice(0, sp)
+        const rest = sp === -1 ? '' : seg.slice(sp)
+        return (
+          <span key={i}>
+            {i > 0 && ' + '}
+            <a className="gene-link" href={href(gene)} target="_blank" rel="noreferrer">
+              {gene}
+            </a>
+            {rest}
+          </span>
+        )
+      })}
+    </>
+  )
+}
+
+function Table({ t, empty, geneHref }: { t: ResultTable; empty: string; geneHref: (gene: string) => string }) {
   if (!t.rows.length) return <p className="muted">{empty}</p>
   return (
     <div className="table-scroll">
@@ -33,7 +56,7 @@ function Table({ t, empty }: { t: ResultTable; empty: string }) {
           {t.rows.map((r, i) => (
             <tr key={i}>
               {t.columns.map((c) => (
-                <td key={c.key}>{cell(r[c.key])}</td>
+                <td key={c.key}>{c.key === 'genes' ? <GeneCell value={cell(r[c.key])} href={geneHref} /> : cell(r[c.key])}</td>
               ))}
             </tr>
           ))}
@@ -156,6 +179,14 @@ export function InterventionsView({ tab, onStart, onRetry }: Props) {
 
   const r = j.result!
   const rejected = r.rejected && r.rejected.n > 0 ? Object.entries(r.rejected.reasons).map(([k, v]) => `${v} ${k.replace(/_/g, ' ')}`).join(', ') : null
+
+  // Repo (BiGG) models: link each gene to its exact BiGG gene page; otherwise an NCBI gene search
+  // scoped by organism (uploaded GEMs can use any id scheme).
+  const { biggId, organism } = tab.snapshot
+  const geneHref = (gene: string) =>
+    biggId
+      ? `https://bigg.ucsd.edu/models/${encodeURIComponent(biggId)}/genes/${encodeURIComponent(gene)}`
+      : `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(`${gene} ${organism ?? ''}`.trim())}`
   return (
     <div className="pane-scroll">
       {header}
@@ -169,9 +200,9 @@ export function InterventionsView({ tab, onStart, onRetry }: Props) {
         </div>
       )}
       <h3>Ranked designs</h3>
-      <Table t={r.table} empty={`No verified designs were found${rejected ? ` (rejected: ${rejected})` : ''}. See the leads below.`} />
+      <Table t={r.table} empty={`No verified designs were found${rejected ? ` (rejected: ${rejected})` : ''}. See the leads below.`} geneHref={geneHref} />
       <h3>Hypotheses (leads)</h3>
-      <Table t={r.hypotheses_table} empty="No hypotheses were produced." />
+      <Table t={r.hypotheses_table} empty="No hypotheses were produced." geneHref={geneHref} />
       {r.notes && r.notes.length > 0 && (
         <ul className="muted">
           {r.notes.map((n) => (

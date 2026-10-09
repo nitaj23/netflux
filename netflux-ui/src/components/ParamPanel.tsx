@@ -237,7 +237,8 @@ export function ParamPanel({ onGenerate }: { onGenerate: (s: RunSnapshot) => voi
     const source: SourceSpec = gem
       ? { strategy: 'custom', gem_token: gem.token, overrides }
       : { strategy: 'repo', model_id: modelId!, overrides }
-    const organism = gem ? gem.name : (organisms.data?.find((o) => o.model.id === modelId)?.model.organism ?? '')
+    const model = gem ? undefined : organisms.data?.find((o) => o.model.id === modelId)?.model
+    const organism = gem ? gem.name : (model?.organism ?? '')
     setFormError(null)
     onGenerate({
       source,
@@ -246,6 +247,8 @@ export function ParamPanel({ onGenerate }: { onGenerate: (s: RunSnapshot) => voi
       substrate: substrate.trim() || undefined,
       carbonSource: substrate.trim() || defaults.carbon_source || undefined,
       label: `${organism} → ${compound.name ?? compound.base_id}`,
+      biggId: model?.bigg_id ?? undefined,
+      organism,
     })
   }
 

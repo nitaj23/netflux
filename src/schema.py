@@ -1,3 +1,4 @@
+import os
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import ForeignKey, Integer, Text, Float, Boolean, Date, Index, UniqueConstraint
 from datetime import date
@@ -12,6 +13,11 @@ class Model(Base):
     source_db: Mapped[str|None] = mapped_column(Text)
     model_path: Mapped[str] = mapped_column(Text, nullable=False)
     file_hash: Mapped[str] = mapped_column(Text, nullable=False)
+
+    @property
+    def bigg_id(self) -> str:
+        """BiGG model identifier — the GEM file's basename (e.g. 'iML1515')."""
+        return os.path.splitext(os.path.basename(self.model_path))[0]
 
 class Reaction(Base):
     __tablename__ = "reactions"

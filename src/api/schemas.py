@@ -150,6 +150,7 @@ class ModelOut(BaseModel):
     source_db: Optional[str] = None
     model_path: str
     file_hash: str
+    bigg_id: Optional[str] = None
 
 
 class ConditionOut(BaseModel):

@@ -11,6 +11,7 @@ export interface ModelOut {
   id: number
   organism: string
   source_db?: string | null
+  bigg_id?: string | null
 }
 
 export interface CompoundOut {

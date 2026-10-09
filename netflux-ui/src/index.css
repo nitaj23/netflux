@@ -117,6 +117,8 @@ button.tab { border: 1px solid var(--line); border-radius: 8px; background: var(
 table { border-collapse: collapse; font-size: 0.9rem; min-width: 100%; }
 th, td { padding: 6px 12px; text-align: left; border-bottom: 1px solid #1d3b3a; white-space: nowrap; }
 th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: #143232; }
+.gene-link { color: var(--accent); text-decoration: none; }
+.gene-link:hover { text-decoration: underline; }
 
 .spinner { width: 22px; height: 22px; border: 3px solid #2c4c4b; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; display: inline-block; }
 .spinner.sm { width: 12px; height: 12px; border-width: 2px; }
