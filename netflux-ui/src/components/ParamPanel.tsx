@@ -248,7 +248,9 @@ export function ParamPanel({ onGenerate }: { onGenerate: (s: RunSnapshot) => voi
       carbonSource: substrate.trim() || defaults.carbon_source || undefined,
       label: `${organism} → ${compound.name ?? compound.base_id}`,
       biggId: model?.bigg_id ?? undefined,
-      organism,
+      // Only a real organism name scopes the NCBI gene search; an uploaded GEM's `organism`
+      // here is just the file name, so leave it out rather than polluting the query.
+      organism: gem ? undefined : organism,
     })
   }
 
@@ -340,12 +342,12 @@ export function ParamPanel({ onGenerate }: { onGenerate: (s: RunSnapshot) => voi
       <div className="row flux">
         <span className="label">Flux</span>
         <div className="flux-grid">
-          <label htmlFor="lb">LB</label>
+          <label htmlFor="lb">Lower bound</label>
           <input id="lb" className="field" inputMode="decimal" value={lb} disabled={!defaults} onChange={(e) => setLb(e.target.value)} />
-          <input className="field unit" value={UNIT} readOnly tabIndex={-1} aria-label="LB unit" />
-          <label htmlFor="ub">UB</label>
+          <input className="field unit" value={UNIT} readOnly tabIndex={-1} aria-label="Lower bound unit" />
+          <label htmlFor="ub">Upper bound</label>
           <input id="ub" className="field" inputMode="decimal" value={ub} disabled={!defaults} onChange={(e) => setUb(e.target.value)} />
-          <input className="field unit" value={UNIT} readOnly tabIndex={-1} aria-label="UB unit" />
+          <input className="field unit" value={UNIT} readOnly tabIndex={-1} aria-label="Upper bound unit" />
         </div>
       </div>
       {boundsExchange && defaults && (
