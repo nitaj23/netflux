@@ -9,6 +9,14 @@ import type { SubgraphTab } from '../state'
 
 const TERMINAL = ['completed', 'failed']
 
+// Canonical, notation-free names for the wild-type baseline chips.
+const BASELINE_LABEL: Record<string, string> = {
+  mu_wt: 'Wild-type growth rate',
+  floor_wt: 'Wild-type yield floor',
+  ceiling_wt: 'Wild-type yield ceiling',
+  substrate_rxn: 'Substrate reaction',
+}
+
 function cell(v: unknown): string {
   if (v === null || v === undefined || v === '') return '—'
   if (Array.isArray(v)) return v.length ? v.join(' + ') : '—'
@@ -229,7 +237,7 @@ export function InterventionsView({ tab, onStart, onRetry }: Props) {
         <div className="chips">
           {Object.entries(r.baseline).map(([k, v]) => (
             <span key={k} className="chip">
-              <small>{k.replace(/_/g, ' ')}</small> {cell(v)}
+              <small>{BASELINE_LABEL[k] ?? k.replace(/_/g, ' ')}</small> {cell(v)}
             </span>
           ))}
         </div>

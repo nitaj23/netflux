@@ -49,12 +49,12 @@ def _translation_label(c: InterventionCandidate) -> str:
         dirs = {a.action for a in c.reaction_actions
                 if a.action in ("upregulation", "downregulation")}
         if dirs == {"upregulation"}:
-            return "Putative up-regulation"
+            return "Up-regulation"
         if dirs == {"downregulation"}:
-            return "Putative down-regulation"
+            return "Down-regulation"
         if dirs:
-            return "Putative up/down-regulation"
-        return "Putative regulation"
+            return "Up/down-regulation"
+        return "Regulation"
     return _TRANSLATION_LABEL.get(c.translation_status, c.translation_status)
 
 
@@ -165,16 +165,14 @@ def candidate_to_dict(c: InterventionCandidate) -> dict:
 _COLUMNS: tuple[tuple[str, str], ...] = (
     ("rank", "Rank"),
     ("intervention_label", "Interventions"),
-    ("cardinality", "Size (k)"),
+    ("cardinality", "Number of interventions"),
     ("verified_floor", "Yield floor"),
     ("verified_ceiling", "Yield ceiling"),
-    ("verified_growth", "Growth"),
-    ("retained_mu", "Retained growth (μ)"),
-    ("growth_robustness_ratio", "Robustness"),
+    ("verified_growth", "Growth rate"),
+    ("retained_mu", "Retained growth rate"),
     ("coupling_class", "Coupling"),
     ("translation_status", "Translation"),
     ("genes", "Gene KO"),
-    ("flags", "Flags"),
 )
 
 
@@ -223,11 +221,11 @@ def ranking_csv(result: RankingResult) -> str:
 
 _HYP_COLUMNS: tuple[tuple[str, str], ...] = (
     ("intervention_label", "Interventions"),
-    ("cardinality", "Size (k)"),
+    ("cardinality", "Number of interventions"),
     ("verified_floor", "Yield floor"),
     ("verified_ceiling", "Yield ceiling"),
-    ("verified_growth", "Growth"),
-    ("retained_mu", "Retained growth (μ)"),
+    ("verified_growth", "Growth rate"),
+    ("retained_mu", "Retained growth rate"),
     ("coupling_class", "Coupling"),
     ("translation_status", "Translation"),
     ("genes", "Putative targets"),
