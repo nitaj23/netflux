@@ -1,8 +1,6 @@
 # NetFlux
 
-NetFlux is a web tool Built by iGEM MIT-MAHE 2026 for metabolic engineering. Choose a compound and an organism, and NetFlux draws the pathway that carries carbon from the substrate to your product, then proposes gene knockouts and regulation strategies that couple production to growth.
-
-
+NetFlux is a web tool Built by iGEM MIT-MAHE 2026 for metabolic engineering.
 
 ## Description
 
@@ -65,19 +63,6 @@ cd netflux-ui
 npm install
 npm run dev                      # http://localhost:5173, proxies /api to the backend
 ```
-
-### Configuration
-
-All settings are optional environment variables.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `HOST`, `PORT` | `127.0.0.1`, `8000` | Address the API listens on |
-| `DATABASE_URL` | `sqlite:///./mfghub.db` | Database location; a PostgreSQL URL also works |
-| `NETFLUX_CORS_ORIGINS` | localhost ports 3000 and 5173 | Comma-separated origins allowed to call the API |
-| `NETFLUX_MAX_DESIGN_JOBS` | `4` | Maximum strain-design jobs running at once |
-| `NETFLUX_API` | `http://127.0.0.1:8000` | Backend address the frontend dev server proxies to |
-| `API_RELOAD`, `DB_ECHO` | off | Auto-reload the API; log SQL queries |
 
 ## Usage
 
@@ -153,3 +138,25 @@ To submit a model:
 We review each submission for consistency before adding it to the repository database. Please include a citation or provenance for the model so it can be properly attributed.
 
 You can also send us data at mitmahe2026software@gmail.com
+
+
+## Authors and acknowledgment
+
+NetFlux was built by **Team MIT-MAHE 2026** for the iGEM competition. We thank our instructors, advisors, and the wider iGEM community for their support.
+
+NetFlux stands on a body of open methods and tools from the metabolic-modelling and network-science communities. We gratefully acknowledge the following key works, which the pipeline directly builds on:
+
+- Beguerisse-Díaz, M., Bosque, G., Oyarzún, D., Picó, J., & Barahona, M. (2018). Flux-dependent graphs for metabolic networks. *npj Systems Biology and Applications, 4*(1), 32. https://doi.org/10.1038/s41540-018-0067-y
+- Burgard, A. P., Nikolaev, E. V., Schilling, C. H., & Maranas, C. D. (2004). Flux coupling analysis of genome-scale metabolic network reconstructions. *Genome Research, 14*(2), 301–312. https://doi.org/10.1101/gr.1926504
+- Burgard, A. P., Pharkya, P., & Maranas, C. D. (2003). OptKnock: A bilevel programming framework for identifying gene knockout strategies for microbial strain optimization. *Biotechnology and Bioengineering, 84*(6), 647–657. https://doi.org/10.1002/bit.10803
+- Ebrahim, A., Lerman, J. A., Palsson, B. O., & Hyduke, D. R. (2013). COBRApy: Constraints-based reconstruction and analysis for Python. *BMC Systems Biology, 7*(1), 74. https://doi.org/10.1186/1752-0509-7-74
+- Hasibi, R., Michoel, T., & Oyarzún, D. A. (2024). Integration of graph neural networks and genome-scale metabolic models for predicting gene essentiality. *npj Systems Biology and Applications, 10*(1), 24. https://doi.org/10.1038/s41540-024-00348-2
+- Orth, J. D., Thiele, I., & Palsson, B. Ø. (2010). What is flux balance analysis? *Nature Biotechnology, 28*(3), 245–248. https://doi.org/10.1038/nbt.1614
+- Ranganathan, S., Suthers, P. F., & Maranas, C. D. (2010). OptForce: An optimization procedure for identifying all genetic manipulations leading to targeted overproductions. *PLoS Computational Biology, 6*(4), e1000744. https://doi.org/10.1371/journal.pcbi.1000744
+- Silva, M. I., Aparício, D., Malveiro, B., Ascensão, J. T., & Bizarro, P. (2021). GUDIE: A flexible, user-defined method to extract subgraphs of interest from large graphs. *arXiv*. https://doi.org/10.48550/arXiv.2108.09200
+- Tong, H., Faloutsos, C., & Pan, J. (2006). Fast random walk with restart and its applications. *Proceedings of the Sixth International Conference on Data Mining (ICDM)*, 613–622. https://doi.org/10.1109/ICDM.2006.70
+- Vlassis, N., Pacheco, M. P., & Sauter, T. (2014). Fast reconstruction of compact context-specific metabolic network models. *PLoS Computational Biology, 10*(1), e1003424. https://doi.org/10.1371/journal.pcbi.1003424
+
+
+## License
+This repository is licensed under the [Apache License 2.0](LICENSE)
